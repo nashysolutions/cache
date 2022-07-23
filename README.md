@@ -7,7 +7,7 @@ Hold values or objects in volatile memory for a pre-determined amount of time.
 
 ### Usage
 
-Stash any hashable resource against an instance of `UUID`.
+Stash a resource against an instance of `UUID`.
 
 ```swift
 let cache = Cache<UIImage>()
