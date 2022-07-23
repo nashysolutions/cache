@@ -13,6 +13,10 @@ public struct Cache<Item> {
         database.stash(resource)
     }
     
+    public func removeResource(for identifier: UUID) {
+        database.removeResource(for: identifier)
+    }
+    
     public func resource(for identifier: UUID) -> Item? {
         database.resource(for: identifier)?.item
     }

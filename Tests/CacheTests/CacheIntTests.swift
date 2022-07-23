@@ -19,29 +19,4 @@ final class CacheIntTests: XCTestCase {
         let resource = cache.resource(for: identifier)
         XCTAssertEqual(resource, item)
     }
-    
-    func testResourceFetchNonExisting() {
-        
-        // given
-        let identifier = UUID()
-        
-        // then
-        let resource = cache.resource(for: identifier)
-        XCTAssertNil(resource)
-    }
-    
-    func testExpiry() {
-        
-        // given
-        let identifier = UUID()
-        
-        // when
-        let date = Date().addingTimeInterval(1)
-        cache.stash(item, with: identifier, duration: .custom(date))
-        sleep(2)
-        
-        // then
-        let resource = cache.resource(for: identifier)
-        XCTAssertNil(resource)
-    }
 }
