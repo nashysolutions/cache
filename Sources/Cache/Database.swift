@@ -33,4 +33,8 @@ final class Database<Item> {
             storage.remove(resource)
         }
     }
+    
+    func removeAll() {
+        storage.removeAll()
+    }
 }

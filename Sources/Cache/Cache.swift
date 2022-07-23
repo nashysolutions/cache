@@ -20,4 +20,9 @@ public struct Cache<Item> {
     public func resource(for identifier: UUID) -> Item? {
         database.resource(for: identifier)?.item
     }
+    
+    /// Clear the cache completely.
+    public func reset() {
+        database.removeAll()
+    }
 }
