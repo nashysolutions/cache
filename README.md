@@ -20,4 +20,4 @@ let image: UIImage? = cache.resource(for: id)
 ## Installation
 
 Use the [Swift Package Manager](https://github.com/apple/swift-package-manager/tree/master/Documentation).
-See [Releases](https://github.com/nashysolutions/Stash/releases).
+See [Releases](https://github.com/nashysolutions/Cache/releases).
