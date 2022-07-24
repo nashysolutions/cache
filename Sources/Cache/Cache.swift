@@ -4,8 +4,11 @@ public struct Cache<Item> {
     
     private let database: Database<Item>
     
-    public init() {
-        database = Database<Item>()
+    /// Instantiates an instance of this value.
+    /// - Parameter maxSize: The maximum record count of the database. Once
+    /// this count is reached, the store is reset.
+    public init(maxSize count: Int = 100) {
+        database = Database<Item>(recordCountMaximum: count)
     }
 
     public func stash(_ item: Item, with identifier: UUID, duration: Expiry) {
