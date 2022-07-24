@@ -6,8 +6,21 @@ final class Database<Item> {
     
     private var storage = Set<ResourceItem>()
     
+    let recordCountMaximum: Int
+    
+    init(recordCountMaximum: Int) {
+        self.recordCountMaximum = recordCountMaximum
+    }
+    
     func stash(_ resource: ResourceItem) {
+        clearStorageIfNecessary()
         storage.insert(resource)
+    }
+    
+    private func clearStorageIfNecessary() {
+        if storage.count >= recordCountMaximum {
+            removeAll()
+        }
     }
     
     func resource(for identifier: UUID) -> ResourceItem? {
