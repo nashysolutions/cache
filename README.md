@@ -1,6 +1,6 @@
 # Cache
 
-![iOS](https://img.shields.io/badge/iOS-9%2B-blue)
+![iOS](https://img.shields.io/badge/iOS-13%2B-blue)
 ![macOS](https://img.shields.io/badge/macOS-10.15%2B-blue)
 
 Hold values or objects in volatile memory for a pre-determined amount of time.
