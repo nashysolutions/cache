@@ -1,6 +1,6 @@
 import Foundation
 
-final class Database<Item> {
+final class Database<Item: Identifiable> {
     
     typealias ResourceItem = Resource<Item>
     
@@ -23,7 +23,7 @@ final class Database<Item> {
         }
     }
     
-    func resource(for identifier: UUID) -> ResourceItem? {
+    func resource(for identifier: Item.ID) -> ResourceItem? {
         
         let predicate: (ResourceItem) -> Bool = {
             $0.identifier == identifier
@@ -41,7 +41,7 @@ final class Database<Item> {
         return resource
     }
     
-    func removeResource(for identifier: UUID) {
+    func removeResource(for identifier: Item.ID) {
         if let resource = resource(for: identifier) {
             storage.remove(resource)
         }

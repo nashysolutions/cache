@@ -1,10 +1,13 @@
 import Foundation
 
-struct Resource<Item>: Hashable {
+struct Resource<Item: Identifiable>: Hashable {
     
     let item: Item
-    let identifier: UUID
     let expiry: Date
+    
+    var identifier: Item.ID {
+        item.id
+    }
             
     var isExpired: Bool {
         expiry < Date()

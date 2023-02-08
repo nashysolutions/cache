@@ -4,16 +4,16 @@ import Foundation
 
 final class CacheDeleteTests: XCTestCase {
     
-    private let cache = Cache<Int>()
+    private let cache = Cache<TestValue>()
     
     func testRemove() {
         
         // given
-        let identifier = UUID()
+        let item = TestValue(count: 123)
+        let identifier = item.id
         
         // when
-        let item: Int = 123
-        cache.stash(item, with: identifier, duration: .short)
+        cache.stash(item, duration: .short)
         cache.removeResource(for: identifier)
         
         // then
@@ -24,19 +24,17 @@ final class CacheDeleteTests: XCTestCase {
     func testReset() {
         
         // given
-        let identifier1 = UUID()
-        let identifier2 = UUID()
-        let item1: Int = 123
-        let item2: Int = 456
-        cache.stash(item1, with: identifier1, duration: .short)
-        cache.stash(item2, with: identifier2, duration: .short)
+        let item1 = TestValue(count: 123)
+        let item2 = TestValue(count: 456)
+        cache.stash(item1, duration: .short)
+        cache.stash(item2, duration: .short)
         
         // when
         cache.reset()
         
         // then
-        let resource1 = cache.resource(for: identifier1)
-        let resource2 = cache.resource(for: identifier2)
+        let resource1 = cache.resource(for: item1.id)
+        let resource2 = cache.resource(for: item2.id)
         XCTAssertNil(resource1)
         XCTAssertNil(resource2)
     }
@@ -44,7 +42,8 @@ final class CacheDeleteTests: XCTestCase {
     func testResourceFetchNonExisting() {
         
         // given
-        let identifier = UUID()
+        let item = TestValue(count: 123)
+        let identifier = item.id
         
         // then
         let resource = cache.resource(for: identifier)
@@ -54,12 +53,12 @@ final class CacheDeleteTests: XCTestCase {
     func testExpiry() {
         
         // given
-        let identifier = UUID()
+        let item = TestValue(count: 123)
+        let identifier = item.id
         
         // when
         let date = Date().addingTimeInterval(1)
-        let item: Int = 123
-        cache.stash(item, with: identifier, duration: .custom(date))
+        cache.stash(item, duration: .custom(date))
         sleep(2)
         
         // then

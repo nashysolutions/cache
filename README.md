@@ -1,7 +1,7 @@
 # Cache
 
 ![iOS](https://img.shields.io/badge/iOS-9%2B-blue)
-![macOS](https://img.shields.io/badge/macOS-10.10%2B-blue)
+![macOS](https://img.shields.io/badge/macOS-10.15%2B-blue)
 
 Hold values or objects in volatile memory for a pre-determined amount of time.
 
@@ -10,11 +10,15 @@ Hold values or objects in volatile memory for a pre-determined amount of time.
 Stash a resource against an instance of `UUID`.
 
 ```swift
-let cache = Cache<UIImage>()
-cache.stash(image, with: id, duration: .short)
+struct TestValue: Identifiable {
+    let id: UUID
+    let image: UIImage
+}
+let cache = Cache<TestValue>()
+cache.stash(value, duration: .short)
 
 // retrieve using the same `id` value.
-let image: UIImage? = cache.resource(for: id)
+let value: TestValue? = cache.resource(for: value.id)
 ```
 
 ## Installation
