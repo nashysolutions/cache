@@ -7,21 +7,21 @@ final class CacheMaxCountTests: XCTestCase {
     func testResourceMaxSizeExceeded() {
         
         // given - a max size of 2 entries
-        let cache = Cache<Int>(maxSize: 2)
+        let cache = Cache<TestValue>(maxSize: 2)
         
-        let identifier1 = UUID()
-        let identifier2 = UUID()
-        let identifier3 = UUID()
-        let item1: Int = 123
-        let item2: Int = 456
-        let item3: Int = 789
+        let item1 = TestValue(count: 123)
+        let item2 = TestValue(count: 456)
+        let item3 = TestValue(count: 789)
+        let identifier1 = item1.id
+        let identifier2 = item2.id
+        let identifier3 = item3.id
         
         // and - we reach the max size
-        cache.stash(item1, with: identifier1, duration: .short)
-        cache.stash(item2, with: identifier2, duration: .short)
+        cache.stash(item1, duration: .short)
+        cache.stash(item2, duration: .short)
         
         // when - we exceed the cache limit
-        cache.stash(item3, with: identifier3, duration: .short)
+        cache.stash(item3, duration: .short)
                 
         // then - the database is purged of all previous entries
         let resource1 = cache.resource(for: identifier1)
