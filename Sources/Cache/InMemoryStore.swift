@@ -1,6 +1,6 @@
 import Foundation
 
-final class Database<Item: Identifiable> {
+final class InMemoryStore<Item: Identifiable>: ResourceProvider {
     
     typealias ResourceItem = Resource<Item>
     

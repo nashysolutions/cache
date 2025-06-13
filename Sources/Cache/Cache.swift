@@ -2,13 +2,13 @@ import Foundation
 
 public struct Cache<Item: Identifiable> {
     
-    private let database: Database<Item>
+    private let database: InMemoryStore<Item>
     
     /// Instantiates an instance of this value.
     /// - Parameter maxSize: The maximum record count of the database. Once
     /// this count is reached, the store is reset.
     public init(maxSize count: Int = 100) {
-        database = Database<Item>(recordCountMaximum: count)
+        database = InMemoryStore<Item>(recordCountMaximum: count)
     }
     
     /// Stashes an item with the specified duration.
