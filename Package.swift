@@ -1,20 +1,25 @@
-// swift-tools-version:5.3
+// swift-tools-version:5.7
 
 import PackageDescription
 
 let package = Package(
     name: "cache",
-    platforms: [.iOS(.v13), .macOS(.v10_15)],
+    platforms: [.iOS(.v16), .macOS(.v10_15)],
     products: [
         .library(
             name: "Cache",
             targets: ["Cache"]),
     ],
-    dependencies: [],
+    dependencies: [
+        .package(url: "https://github.com/nashysolutions/foundation-dependencies.git", .upToNextMinor(from: "3.1.0"))
+    ],
     targets: [
         .target(
             name: "Cache",
-            dependencies: []),
+            dependencies: [
+                .product(name: "FoundationDependencies", package: "foundation-dependencies")
+            ]
+        ),
         .testTarget(
             name: "CacheTests",
             dependencies: ["Cache"]

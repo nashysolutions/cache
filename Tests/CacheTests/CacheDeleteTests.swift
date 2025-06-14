@@ -6,51 +6,51 @@ final class CacheDeleteTests: XCTestCase {
     
     private let cache = Cache<TestValue>()
     
-    func testRemove() {
+    func testRemove() async {
         
         // given
         let item = TestValue(count: 123)
         let identifier = item.id
         
         // when
-        cache.stash(item, duration: .short)
-        cache.removeResource(for: identifier)
+        await cache.stash(item, duration: .short)
+        await cache.removeResource(for: identifier)
         
         // then
-        let resource = cache.resource(for: identifier)
+        let resource = await cache.resource(for: identifier)
         XCTAssertNil(resource)
     }
     
-    func testReset() {
+    func testReset() async {
         
         // given
         let item1 = TestValue(count: 123)
         let item2 = TestValue(count: 456)
-        cache.stash(item1, duration: .short)
-        cache.stash(item2, duration: .short)
+        await cache.stash(item1, duration: .short)
+        await cache.stash(item2, duration: .short)
         
         // when
-        cache.reset()
+        await cache.reset()
         
         // then
-        let resource1 = cache.resource(for: item1.id)
-        let resource2 = cache.resource(for: item2.id)
+        let resource1 = await cache.resource(for: item1.id)
+        let resource2 = await cache.resource(for: item2.id)
         XCTAssertNil(resource1)
         XCTAssertNil(resource2)
     }
     
-    func testResourceFetchNonExisting() {
+    func testResourceFetchNonExisting() async {
         
         // given
         let item = TestValue(count: 123)
         let identifier = item.id
         
         // then
-        let resource = cache.resource(for: identifier)
+        let resource = await cache.resource(for: identifier)
         XCTAssertNil(resource)
     }
     
-    func testExpiry() {
+    func testExpiry() async {
         
         // given
         let item = TestValue(count: 123)
@@ -58,11 +58,11 @@ final class CacheDeleteTests: XCTestCase {
         
         // when
         let date = Date().addingTimeInterval(1)
-        cache.stash(item, duration: .custom(date))
+        await cache.stash(item, duration: .custom(date))
         sleep(2)
         
         // then
-        let resource = cache.resource(for: identifier)
+        let resource = await cache.resource(for: identifier)
         XCTAssertNil(resource)
     }
 }

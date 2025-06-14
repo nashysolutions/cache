@@ -1,3 +1,10 @@
+//
+//  Expiry.swift
+//  cache
+//
+//  Created by Robert Nash on 14/06/2025.
+//
+
 import Foundation
 
 /// A representation of time, indicating if a resource will be available locally at time of fetch.

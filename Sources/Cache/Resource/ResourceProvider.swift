@@ -7,14 +7,15 @@
 
 import Foundation
 
+@ResourceStorageActor
 protocol ResourceProvider {
     
     associatedtype Item: Identifiable
-    associatedtype ResourceItem = Resource<Item>
     
-    func stash(_ resource: ResourceItem)
-    func resource(for identifier: Item.ID) -> ResourceItem?
+    var recordCountMaximum: UInt { get }
+    
+    func stash(_ resource: Resource<Item>)
+    func resource(for identifier: Item.ID) -> Resource<Item>?
     func removeResource(for identifier: Item.ID)
     func removeAll()
-    init(recordCountMaximum: Int)
 }
