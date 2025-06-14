@@ -6,25 +6,29 @@
 //
 
 import Foundation
+import FoundationDependencies
+import Dependencies
 
 @ResourceStorageActor
 final class FileSystemStorage<Item: Identifiable>: Storage {
     
+    @Dependency(\.fileSystemClient) var fileSystemClient
+    
     var count: Int { fatalError() }
     
-    func insert(_ resource: Resource<Item>) {
+    func insert(_ resource: Resource<Item>) throws {
         fatalError()
     }
     
-    func remove(_ resource: Resource<Item>) {
+    func remove(_ resource: Resource<Item>) throws {
         fatalError()
     }
     
-    func removeAll() {
+    func removeAll() throws {
         fatalError()
     }
     
-    func first(where: (Resource<Item>) -> Bool) -> Resource<Item>? {
+    func first(where: (Resource<Item>) -> Bool) throws -> Resource<Item>? {
         fatalError()
     }
 }

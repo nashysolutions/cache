@@ -7,6 +7,17 @@
 
 import Foundation
 
-@globalActor actor ResourceStorageActor: GlobalActor {
-    static let shared = ResourceStorageActor()
+/// A global actor used to isolate access to resource storage operations.
+///
+/// `ResourceStorageActor` ensures that all interactions with resource-backed storage
+/// (such as inserting, removing, or querying cached items) are performed in a serial,
+/// thread-safe manner.
+///
+/// Use this actor to coordinate access to types that manage in-memory or shared resource state,
+/// especially in contexts like caching or database-like abstractions.
+@globalActor
+actor ResourceStorageActor: GlobalActor {
+    
+    /// The shared instance of the global actor.
+    public static let shared = ResourceStorageActor()
 }

@@ -14,8 +14,8 @@ protocol ResourceProvider {
     
     var recordCountMaximum: UInt { get }
     
-    func stash(_ resource: Resource<Item>)
-    func resource(for identifier: Item.ID) -> Resource<Item>?
-    func removeResource(for identifier: Item.ID)
-    func removeAll()
+    func stash(_ resource: Resource<Item>) throws
+    func resource(for identifier: Item.ID) throws -> Resource<Item>?
+    func removeResource(for identifier: Item.ID) throws
+    func removeAll() throws
 }

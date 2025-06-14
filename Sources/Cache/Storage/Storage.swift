@@ -28,21 +28,21 @@ protocol Storage {
     /// If a resource with the same identifier already exists, it is updated with the new one.
     ///
     /// - Parameter resource: The resource to insert into storage.
-    func insert(_ resource: Resource<Item>)
+    func insert(_ resource: Resource<Item>) throws
 
     /// Removes a specific resource from storage.
     ///
     /// - Parameter resource: The resource to remove. If it does not exist, this operation has no effect.
-    func remove(_ resource: Resource<Item>)
+    func remove(_ resource: Resource<Item>) throws
 
     /// Clears all resources from storage.
     ///
     /// This operation removes all entries, regardless of expiry status.
-    func removeAll()
+    func removeAll() throws
 
     /// Finds the first resource that matches the given predicate.
     ///
     /// - Parameter where: A closure that evaluates whether a given resource matches the criteria.
     /// - Returns: The first matching resource if found; otherwise, `nil`.
-    func first(where: (Resource<Item>) -> Bool) -> Resource<Item>?
+    func first(where: (Resource<Item>) -> Bool) throws -> Resource<Item>?
 }
