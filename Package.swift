@@ -11,7 +11,7 @@ let package = Package(
             targets: ["Cache"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/nashysolutions/foundation-dependencies.git", .upToNextMinor(from: "3.1.0"))
+        .package(url: "https://github.com/nashysolutions/foundation-dependencies.git", .upToNextMinor(from: "3.2.0"))
     ],
     targets: [
         .target(

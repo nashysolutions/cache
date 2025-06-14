@@ -1,5 +1,5 @@
 //
-//  Resource.swift
+//  CodableResource.swift
 //  cache
 //
 //  Created by Robert Nash on 14/06/2025.
@@ -7,10 +7,9 @@
 
 import Foundation
 
-/// A wrapper that associates an identifiable item with an expiry date,
-/// without requiring Codable conformance.
-public struct Resource<Item: Identifiable>: ExpiringResource, Hashable {
-
+/// A codable variant of `Resource` that wraps an identifiable and codable item.
+public struct CodableResource<Item: Identifiable & Codable>: ExpiringResource, Codable, Hashable {
+    
     public let item: Item
     public let expiry: Date
 

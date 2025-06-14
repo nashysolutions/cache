@@ -17,12 +17,6 @@ public protocol Cache {
     /// The type of item being stored in the cache.
     associatedtype Item: Identifiable
 
-    /// Creates a new cache instance with a maximum size limit.
-    ///
-    /// - Parameter count: The maximum number of items allowed in the cache. Once this limit is reached,
-    ///   the cache may be reset or purged depending on the implementation.
-    init(maxSize count: UInt)
-
     /// Stashes an item into the cache with an associated expiry duration.
     ///
     /// - Parameters:

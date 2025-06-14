@@ -11,11 +11,20 @@ import Foundation
 protocol ResourceProvider {
     
     associatedtype Item: Identifiable
-    
+    associatedtype StoredResource: ExpiringResource where StoredResource.Item == Item
+
+    /// The maximum number of items allowed in the resource store.
     var recordCountMaximum: UInt { get }
-    
-    func stash(_ resource: Resource<Item>) throws
-    func resource(for identifier: Item.ID) throws -> Resource<Item>?
+
+    /// Inserts or replaces a resource.
+    func stash(_ resource: StoredResource) throws
+
+    /// Returns a non-expired resource for the given identifier.
+    func resource(for identifier: Item.ID) throws -> StoredResource?
+
+    /// Removes a resource by identifier, if it exists.
     func removeResource(for identifier: Item.ID) throws
+
+    /// Removes all resources from the store.
     func removeAll() throws
 }

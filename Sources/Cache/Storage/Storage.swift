@@ -15,34 +15,17 @@ import Foundation
 @ResourceStorageActor
 protocol Storage {
     
-    /// The type of item stored in the resource.
     associatedtype Item: Identifiable
+    associatedtype Resource: ExpiringResource where Resource.Item == Item
 
     /// The total number of stored resources.
-    ///
-    /// This count may include expired items unless explicitly cleaned.
     var count: Int { get }
 
-    /// Inserts or replaces a resource in storage.
-    ///
-    /// If a resource with the same identifier already exists, it is updated with the new one.
-    ///
-    /// - Parameter resource: The resource to insert into storage.
-    func insert(_ resource: Resource<Item>) throws
-
-    /// Removes a specific resource from storage.
-    ///
-    /// - Parameter resource: The resource to remove. If it does not exist, this operation has no effect.
-    func remove(_ resource: Resource<Item>) throws
-
-    /// Clears all resources from storage.
-    ///
-    /// This operation removes all entries, regardless of expiry status.
+    func insert(_ resource: Resource) throws
+    func remove(_ resource: Resource) throws
     func removeAll() throws
 
-    /// Finds the first resource that matches the given predicate.
-    ///
-    /// - Parameter where: A closure that evaluates whether a given resource matches the criteria.
-    /// - Returns: The first matching resource if found; otherwise, `nil`.
-    func first(where: (Resource<Item>) -> Bool) throws -> Resource<Item>?
+    func first(where: (Resource) -> Bool) throws -> Resource?
 }
+
+protocol CodableStorage: Storage where Item: Codable, Resource: Codable {}

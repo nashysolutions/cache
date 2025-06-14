@@ -8,27 +8,52 @@
 import Foundation
 import FoundationDependencies
 import Dependencies
+import Files
 
 @ResourceStorageActor
-final class FileSystemStorage<Item: Identifiable>: Storage {
+final class FileSystemStorage<Item: Identifiable & Codable>: CodableStorage {
     
+    typealias StoredResource = CodableResource<Item>
+    typealias Resource = StoredResource
+
     @Dependency(\.fileSystemClient) var fileSystemClient
-    
-    var count: Int { fatalError() }
-    
-    func insert(_ resource: Resource<Item>) throws {
-        fatalError()
+
+    private let fileSystemDirectory: FileSystemDirectory
+    private let subfolder: String?
+
+    nonisolated init(fileSystemDirectory: FileSystemDirectory, subfolder: String?) {
+        self.fileSystemDirectory = fileSystemDirectory
+        self.subfolder = subfolder
     }
-    
-    func remove(_ resource: Resource<Item>) throws {
+
+    var count: Int {
         fatalError()
+//        let store = try? fileSystemClient.makeStore(fileSystemDirectory, subfolder)
+//        return store?.resourceCount() ?? 0
     }
-    
+
+    func insert(_ resource: Resource) throws {
+        let store = try fileSystemClient.makeStore(fileSystemDirectory, subfolder)
+        let filename = String(describing: resource.identifier)
+        try store.saveResource(resource, filename: filename)
+    }
+
+    func remove(_ resource: Resource) throws {
+        let store = try fileSystemClient.makeStore(fileSystemDirectory, subfolder)
+        let filename = String(describing: resource.identifier)
+        try store.deleteResource(filename: filename)
+    }
+
     func removeAll() throws {
         fatalError()
+//        let store = try fileSystemClient.makeStore(fileSystemDirectory, subfolder)
+//        try store.deleteAllResources()
     }
-    
-    func first(where: (Resource<Item>) -> Bool) throws -> Resource<Item>? {
+
+    func first(where predicate: (Resource) -> Bool) throws -> Resource? {
         fatalError()
+//        let store = try fileSystemClient.makeStore(fileSystemDirectory, subfolder)
+//        let all = try store.loadAllResources(Resource.self)
+//        return all.first(where: predicate)
     }
 }
