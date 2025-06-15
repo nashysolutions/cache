@@ -12,7 +12,7 @@
   - `FileSystemCache`: persistent, file-backed storage
 - ⏱ Expiry support: `.short` or `.custom(Date)`
 - 🧪 Testable without delays (no need for `sleep`)
-- 🕹 Native async/await support
+- 🕹 Native async/await support. Fully thread safe and sendable.
 - 🧩 Easily injectable via `swift-dependencies`
 
 ---
