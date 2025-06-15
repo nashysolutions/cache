@@ -1,3 +1,10 @@
+//
+//  VolatileCacheTests.swift
+//  cache
+//
+//  Created by Robert Nash on 15/06/2025.
+//
+
 import Testing
 import Foundation
 import Dependencies
@@ -5,8 +12,8 @@ import DependenciesTestSupport
 
 @testable import Cache
 
-@Suite("Cache Delete Tests")
-struct CacheDeleteTests {
+@Suite("Volatile Cache Tests")
+struct VolatileCacheTests {
 
     @Test("Remove a stashed item")
     func testRemove() async throws {
