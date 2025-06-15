@@ -16,7 +16,5 @@ struct VolatileDatabase<Item: Identifiable>: Database {
     /// The underlying in-memory storage provider.
     let storage = VolatileStorage<Item>()
     
-    nonisolated init() {
-        
-    }
+    nonisolated init() {}
 }
