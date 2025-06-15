@@ -32,8 +32,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/nashysolutions/foundation-dependencies.git",
       "state" : {
-        "revision" : "af099f13f775863df6876d17f8370b1eb97fefac",
-        "version" : "3.2.0"
+        "revision" : "d37471abb47972ea56ab8257d475830537844d52",
+        "version" : "4.0.0"
       }
     },
     {

@@ -6,34 +6,40 @@
 //
 
 import Foundation
+import Dependencies
 
 /// A protocol describing a resource associated with an identifiable item and an expiry date.
-public protocol ExpiringResource {
+protocol IdentifiableResource {
     
     associatedtype Item: Identifiable
 
     /// The underlying item.
     var item: Item { get }
 
-    /// The expiry date for this resource.
-    var expiry: Date { get }
-
     /// The identifier derived from the item.
     var identifier: Item.ID { get }
-
-    /// Indicates whether the resource has expired.
-    var isExpired: Bool { get }
 }
 
-public extension ExpiringResource {
+extension IdentifiableResource {
     
     /// Returns the identifier of the wrapped item.
     var identifier: Item.ID {
         item.id
     }
+}
+
+protocol ExpiringResource: IdentifiableResource {
+    /// The expiry date for this resource.
+    var expiry: Date { get }
+    /// Indicates whether the resource has expired.
+    var isExpired: Bool { get }
+}
+
+extension ExpiringResource {
     
     /// Whether the resource has expired.
     var isExpired: Bool {
-        expiry < Date()
+        @Dependency(\.date) var date
+        return expiry < date.now
     }
 }

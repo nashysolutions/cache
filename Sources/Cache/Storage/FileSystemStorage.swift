@@ -15,45 +15,44 @@ final class FileSystemStorage<Item: Identifiable & Codable>: CodableStorage {
     
     typealias StoredResource = CodableResource<Item>
     typealias Resource = StoredResource
-
-    @Dependency(\.fileSystemClient) var fileSystemClient
-
+    
+    @Dependency(\.fileSystemResourceClient) var fileSystemResourceClient
+    
     private let fileSystemDirectory: FileSystemDirectory
     private let subfolder: String?
-
+    
     nonisolated init(fileSystemDirectory: FileSystemDirectory, subfolder: String?) {
         self.fileSystemDirectory = fileSystemDirectory
         self.subfolder = subfolder
     }
-
-    var count: Int {
-        fatalError()
-//        let store = try? fileSystemClient.makeStore(fileSystemDirectory, subfolder)
-//        return store?.resourceCount() ?? 0
+    
+    private var store: any FileSystemOperations {
+        get throws {
+            try fileSystemResourceClient.makeStore(fileSystemDirectory, subfolder)
+        }
     }
 
     func insert(_ resource: Resource) throws {
-        let store = try fileSystemClient.makeStore(fileSystemDirectory, subfolder)
-        let filename = String(describing: resource.identifier)
-        try store.saveResource(resource, filename: filename)
+        try store.saveResource(resource, filename: filename(for: resource))
     }
-
+    
     func remove(_ resource: Resource) throws {
-        let store = try fileSystemClient.makeStore(fileSystemDirectory, subfolder)
-        let filename = String(describing: resource.identifier)
-        try store.deleteResource(filename: filename)
+        try store.deleteResource(filename: filename(for: resource))
     }
-
+    
     func removeAll() throws {
-        fatalError()
-//        let store = try fileSystemClient.makeStore(fileSystemDirectory, subfolder)
-//        try store.deleteAllResources()
+        try store.folder.deleteIfExists(using: store.agent)
     }
-
-    func first(where predicate: (Resource) -> Bool) throws -> Resource? {
-        fatalError()
-//        let store = try fileSystemClient.makeStore(fileSystemDirectory, subfolder)
-//        let all = try store.loadAllResources(Resource.self)
-//        return all.first(where: predicate)
+    
+    func resource(for identifier: Item.ID) throws -> StoredResource? {
+        try store.loadResource(filename: filename(for: identifier))
+    }
+    
+    private func filename(for resource: Resource) -> String {
+        filename(for: resource.identifier)
+    }
+    
+    private func filename(for identifier: Item.ID) -> String {
+        String(describing: identifier)
     }
 }

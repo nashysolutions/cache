@@ -11,10 +11,7 @@ import Foundation
 protocol ResourceProvider {
     
     associatedtype Item: Identifiable
-    associatedtype StoredResource: ExpiringResource where StoredResource.Item == Item
-
-    /// The maximum number of items allowed in the resource store.
-    var recordCountMaximum: UInt { get }
+    associatedtype StoredResource: IdentifiableResource /*ExpiringResource*/ where StoredResource.Item == Item
 
     /// Inserts or replaces a resource.
     func stash(_ resource: StoredResource) throws

@@ -15,3 +15,12 @@ struct TestValue: Identifiable {
     
     let count: Int
 }
+
+struct CodableTestValue: Identifiable, Codable {
+    
+    var id: Int {
+        count
+    }
+    
+    let count: Int
+}

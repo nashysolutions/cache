@@ -9,14 +9,10 @@ import Foundation
 
 @ResourceStorageActor
 final class VolatileStorage<Item: Identifiable>: Storage {
-
+    
     typealias StoredResource = Resource<Item>
 
     private var storage = Set<StoredResource>()
-
-    var count: Int {
-        storage.count
-    }
 
     func insert(_ resource: StoredResource) {
         storage.update(with: resource)
@@ -29,8 +25,9 @@ final class VolatileStorage<Item: Identifiable>: Storage {
     func removeAll() {
         storage.removeAll()
     }
-
-    func first(where predicate: (StoredResource) -> Bool) -> StoredResource? {
-        storage.first(where: predicate)
+    
+    func resource(for identifier: Item.ID) throws -> StoredResource? {
+        let predicate: (StoredResource) -> Bool = { $0.identifier == identifier }
+        return storage.first(where: predicate)
     }
 }

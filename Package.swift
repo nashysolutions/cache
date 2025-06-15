@@ -11,7 +11,8 @@ let package = Package(
             targets: ["Cache"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/nashysolutions/foundation-dependencies.git", .upToNextMinor(from: "3.2.0"))
+        .package(url: "https://github.com/nashysolutions/foundation-dependencies.git", .upToNextMinor(from: "4.0.0")),
+        .package(url: "https://github.com/pointfreeco/swift-dependencies.git", .upToNextMinor(from: "1.8.1"))
     ],
     targets: [
         .target(
@@ -22,7 +23,10 @@ let package = Package(
         ),
         .testTarget(
             name: "CacheTests",
-            dependencies: ["Cache"]
+            dependencies: [
+                "Cache",
+                    .product(name: "DependenciesTestSupport", package: "swift-dependencies")
+            ]
         )
     ]
 )

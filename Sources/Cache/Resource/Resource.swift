@@ -9,7 +9,7 @@ import Foundation
 
 /// A wrapper that associates an identifiable item with an expiry date,
 /// without requiring Codable conformance.
-public struct Resource<Item: Identifiable>: ExpiringResource, Hashable {
+public struct Resource<Item: Identifiable>: IdentifiableResource /*ExpiringResource*/, Hashable {
 
     public let item: Item
     public let expiry: Date
