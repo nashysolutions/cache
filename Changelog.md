@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## Future versions
+
+No longer maintaining this file.
+
 ## [3.0.0] - 2023-02-08
 
 Breaking change. No longer accepting `UUID` by default. Stash candidates must now conform to identifiable. Minimum deployment for each platform bumped.
