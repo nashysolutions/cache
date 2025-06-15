@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import Dependencies
 
 /// A protocol describing a resource associated with an identifiable item and an expiry date.
 protocol IdentifiableResource {
@@ -39,7 +38,6 @@ extension ExpiringResource {
     
     /// Whether the resource has expired.
     var isExpired: Bool {
-        @Dependency(\.date) var date
-        return expiry < date.now
+        expiry < Date()
     }
 }

@@ -14,10 +14,7 @@ import Files
 
 @testable import Cache
 
-@Suite(
-    "FileSystemCacheTests",
-    .dependencies { $0.date.now = Date() }
-)
+@Suite("FileSystemCacheTests")
 struct FileSystemCacheTests {
     
     /// Verifies that `FileSystemResourceClient.makeStore` is called with the expected

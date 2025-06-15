@@ -5,10 +5,7 @@ import DependenciesTestSupport
 
 @testable import Cache
 
-@Suite(
-    "Cache Delete Tests",
-    .dependencies { $0.date.now = Date() }
-)
+@Suite("Cache Delete Tests")
 struct CacheDeleteTests {
 
     @Test("Remove a stashed item")
@@ -17,7 +14,7 @@ struct CacheDeleteTests {
         let item = TestValue(count: 123)
         let identifier = item.id
 
-        try await cache.stash(item)
+        try await cache.stash(item, duration: .short)
         try await cache.removeResource(for: identifier)
 
         let resource = try await cache.resource(for: identifier)
@@ -30,8 +27,8 @@ struct CacheDeleteTests {
         let item1 = TestValue(count: 123)
         let item2 = TestValue(count: 456)
 
-        try await cache.stash(item1)
-        try await cache.stash(item2)
+        try await cache.stash(item1, duration: .short)
+        try await cache.stash(item2, duration: .short)
         try await cache.reset()
 
         let resource1 = try await cache.resource(for: item1.id)
@@ -47,38 +44,34 @@ struct CacheDeleteTests {
         let resource = try await cache.resource(for: identifier)
         #expect(resource == nil)
     }
-
-    @Test("Resource is not expired before custom duration", .disabled("Not currently supporting resource expiry logic"))
+    
+    @Test("Resource is not expired before custom duration")
     func testResourceIsNotExpiredBeforeCustomDuration() async throws {
+        // Given: A short custom expiry (2 seconds from now)
         let cache = VolatileCache<TestValue>()
         let item = TestValue(count: 123)
         let identifier = item.id
+        let expiry = Expiry.custom(Date().addingTimeInterval(2))
 
-        //let now = Date()
-        //let expiry = Expiry.custom(now.addingTimeInterval(2)) // Expires in 2s
+        try await cache.stash(item, duration: expiry)
 
-        try await cache.stash(item)
-
-        try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+        // Then: The resource should not be expired
         let resource = try await cache.resource(for: identifier)
-
-        #expect(resource != nil) // ✅ not expired yet
+        #expect(resource != nil)
     }
 
-    @Test("Resource is expired after custom duration", .disabled("Not currently supporting resource expiry logic"))
+    @Test("Resource is expired after custom duration")
     func testResourceIsExpiredAfterCustomDuration() async throws {
+        // Given: A short custom expiry (1 second from now)
         let cache = VolatileCache<TestValue>()
         let item = TestValue(count: 123)
         let identifier = item.id
+        let expiry = Expiry.custom(Date().addingTimeInterval(-1))
 
-        //let now = Date()
-        //let expiry = Expiry.custom(now.addingTimeInterval(1)) // Expires in 1s
+        try await cache.stash(item, duration: expiry)
 
-        try await cache.stash(item)
-
-        try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+        // Then: The resource should be expired and unavailable
         let resource = try await cache.resource(for: identifier)
-
-        #expect(resource == nil) // ✅ expired
+        #expect(resource == nil)
     }
 }
