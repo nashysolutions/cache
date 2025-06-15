@@ -1,27 +1,73 @@
 # Cache
 
-![iOS](https://img.shields.io/badge/iOS-13%2B-blue)
-![macOS](https://img.shields.io/badge/macOS-10.15%2B-blue)
+**Cache** is a Swift library for caching `Identifiable` values with optional expiry logic. It supports both **in-memory** and **file-backed** storage, making it suitable for short-lived data, offline persistence, or resource caching.
 
-Hold values or objects in volatile memory for a pre-determined amount of time.
+---
 
-### Usage
+## Features
 
-Stash a resource against an instance of `UUID`.
+- ✅ Type-safe caching for any `Identifiable` type
+- 📦 Two interchangeable storage implementations:
+  - `VolatileCache`: fast in-memory storage
+  - `FileSystemCache`: persistent, file-backed storage
+- ⏱ Expiry support: `.short` or `.custom(Date)`
+- 🧪 Testable without delays (no need for `sleep`)
+- 🕹 Native async/await support
+- 🧩 Easily injectable via `swift-dependencies`
+
+---
+
+## Usage
+
+### Volatile (in-memory) caching
 
 ```swift
-struct TestValue: Identifiable {
-    let id: UUID
-    let image: UIImage
-}
-let cache = Cache<TestValue>()
-cache.stash(value, duration: .short)
+let cache = VolatileCache<MyModel>()
 
-// retrieve using the same `id` value.
-let value: TestValue? = cache.resource(for: value.id)
+try await cache.stash(MyModel(id: "a", name: "Temp"), duration: .short)
+
+let item = try await cache.resource(for: "a")
 ```
 
-## Installation
+### File-backed persistent caching
 
-Use the [Swift Package Manager](https://github.com/apple/swift-package-manager/tree/master/Documentation).
-See [Releases](https://github.com/nashysolutions/Cache/releases).
+```swift
+let cache = try FileSystemCache<MyModel>(directory: .caches, "games")
+
+try await cache.stash(MyModel(id: "b", name: "something"), duration: .custom(.distantFuture))
+
+let item = try await cache.resource(for: "b")
+```
+
+---
+
+## Dependency Injection
+
+If you're using [`swift-dependencies`](https://github.com/pointfreeco/swift-dependencies), you can expose your preferred cache type as a dependency:
+
+```swift
+import Dependencies
+import Cache
+
+extension DependencyValues {
+    /// A cache for storing and retrieving `Sport` models.
+    var sportCache: any Cache<Sport> {
+        get { self[SportCacheKey.self] }
+        set { self[SportCacheKey.self] = newValue }
+    }
+}
+
+private enum SportCacheKey: DependencyKey {
+    static let liveValue: any Cache<Sport> = FileSystemCache(
+        directory: .caches,
+        subfolder: "sports"
+    )
+}
+```
+
+Then use it like this:
+
+```swift
+@Dependency(\.sportCache) var sportCache
+let sport = try await sportCache.resource(for: id)
+```
