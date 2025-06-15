@@ -19,5 +19,5 @@ import Foundation
 actor ResourceStorageActor: GlobalActor {
     
     /// The shared instance of the global actor.
-    public static let shared = ResourceStorageActor()
+    static let shared = ResourceStorageActor()
 }
