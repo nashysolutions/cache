@@ -21,7 +21,7 @@ struct FileSystemCacheTests {
     /// directory and subfolder arguments.
     ///
     /// This test also confirms that the `makeStore` closure is executed exactly once.
-    @Test("makeStore captures the correct directory and subfolder")
+    @Test("The makeStore closure captures the correct directory and subfolder")
     func testMakeStoreReceivesCorrectFolderArguments() async throws {
         
         let folderStore = MockFileSystemFolderStore()
@@ -76,7 +76,7 @@ struct FileSystemCacheTests {
         // Then: loadResource and deleteResource should both have been called
         #expect(folderStore.called == [
             .loadResource,     // ✅ load endpoint hit (mocked success so moves on to delete)
-            .deleteResource    // ✅ delete endpoint hit load
+            .deleteResource    // ✅ delete endpoint hit
         ])
     }
 }
