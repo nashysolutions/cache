@@ -1,5 +1,8 @@
 # Cache
 
+[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fnashysolutions%2Fcache%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/nashysolutions/cache)
+[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fnashysolutions%2Fcache%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/nashysolutions/cache)
+
 **Cache** is a Swift library for caching `Identifiable` values with optional expiry logic. It supports both **in-memory** and **file-backed** storage, making it suitable for short-lived data, offline persistence, or resource caching.
 
 ---
