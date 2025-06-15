@@ -7,22 +7,34 @@
 
 import Foundation
 
-/// A representation of time, indicating if a resource will be available locally at time of fetch.
-enum Expiry {
+/// A representation of expiration policy, indicating how long a resource should be considered valid.
+///
+/// `Expiry` provides a way to express short-lived or long-lived local validity for cached or stored resources.
+/// It can be used to determine whether a resource is stale or still usable at the time of fetch.
+///
+/// This is typically used in cache management or offline resource fetching systems.
+public enum Expiry {
     
-    // 1 minute
+    /// Indicates a short-lived resource, typically valid for **1 minute** from now.
     case short
-    // 3 minutes
+
+    /// Indicates a medium-lived resource, typically valid for **3 minutes** from now.
     case medium
-    // 1 hour
+
+    /// Indicates a long-lived resource, typically valid for **1 hour** from now.
     case long
-    // Any date specified.
+
+    /// Indicates a custom expiration date.
+    ///
+    /// - Parameter date: The explicit `Date` at which the resource should expire.
     case custom(Date)
 
-    /// Returns the absolute expiry `Date` based on the provided reference time.
+    /// Computes the absolute expiry `Date` using the provided base time.
     ///
-    /// - Parameter now: The base time from which to calculate the expiry. Defaults to current time.
-    /// - Returns: A `Date` representing the expiry deadline.
+    /// - Parameter now: The reference time from which to compute expiry.
+    ///   Defaults to the current date and time.
+    ///
+    /// - Returns: A `Date` representing the exact expiration time.
     func date(using now: Date = Date()) -> Date {
         switch self {
         case .short: return now.addingTimeInterval(60 * 1)

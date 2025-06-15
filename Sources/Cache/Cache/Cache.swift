@@ -9,33 +9,44 @@ import Foundation
 
 /// A protocol that defines a generic, storable cache for identifiable items.
 ///
-/// Types conforming to `Cache` are expected to provide an asynchronous interface for storing,
-/// retrieving, and removing items, as well as resetting the entire cache.
+/// `Cache` provides an abstraction over asynchronous, expiry-aware caches that support
+/// insert, lookup, and removal operations for items identified by a unique ID. It is
+/// suitable for both in-memory and persistent cache implementations.
+///
+/// Conforming types are responsible for managing item expiry and storage lifecycle,
+/// and must not return expired items from the `resource(for:)` method.
+///
+/// - Note: This protocol is designed for use with Swift Concurrency.
 public protocol Cache {
     
     /// The type of item being stored in the cache.
     associatedtype Item: Identifiable
 
-    /// Stashes an item into the cache.
+    /// Inserts or updates a cache entry for the given item, using the provided expiry duration.
     ///
     /// - Parameters:
-    ///   - item: The item to be cached.
-    func stash(_ item: Item) async throws
-//    func stash(_ item: Item, duration: Expiry) async throws
+    ///   - item: The item to be stored in the cache.
+    ///   - duration: The expiry policy defining how long the item remains valid.
+    /// - Throws: An error if the item could not be cached.
+    func stash(_ item: Item, duration: Expiry) async throws
 
     /// Removes a cached item using its identifier.
     ///
     /// - Parameter identifier: The identifier of the item to remove.
+    /// - Throws: An error if the item could not be removed.
     func removeResource(for identifier: Item.ID) async throws
 
     /// Retrieves a cached item by its identifier, if it exists and is not expired.
     ///
     /// - Parameter identifier: The identifier of the item to retrieve.
-    /// - Returns: The cached item if it exists and is valid, or `nil` if not found or expired.
+    /// - Returns: The cached item if it exists and is still valid, or `nil` if not found or expired.
+    /// - Throws: An error if the lookup fails.
     func resource(for identifier: Item.ID) async throws -> Item?
 
     /// Clears all items from the cache.
     ///
-    /// This method removes all currently cached items regardless of their expiry status.
+    /// This method removes all cached entries, regardless of expiry status.
+    ///
+    /// - Throws: An error if the reset operation fails.
     func reset() async throws
 }
