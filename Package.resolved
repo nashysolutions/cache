@@ -10,21 +10,12 @@
       }
     },
     {
-      "identity" : "error-presentation",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/nashysolutions/error-presentation.git",
-      "state" : {
-        "revision" : "fff6000d6642eebda879e3d57965541dd6a4aa47",
-        "version" : "1.0.0"
-      }
-    },
-    {
       "identity" : "files",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/nashysolutions/files.git",
       "state" : {
-        "revision" : "9c76306050115394e69c7b05ff289d2d11135bea",
-        "version" : "2.1.0"
+        "revision" : "b674b4f0eaae8c2519d921bb6f5fe7e41e036e75",
+        "version" : "2.2.0"
       }
     },
     {
@@ -32,8 +23,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/nashysolutions/foundation-dependencies.git",
       "state" : {
-        "revision" : "d37471abb47972ea56ab8257d475830537844d52",
-        "version" : "4.0.0"
+        "revision" : "18bc163bc56607062b1e059bca1aea7b4b2f56cf",
+        "version" : "5.0.0"
       }
     },
     {
