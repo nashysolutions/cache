@@ -1,8 +1,4 @@
-# Error Handling
-
-The `Cache` library uses Swift's `throws` mechanism to signal failure during cache operations. This allows developers to explicitly handle issues like file system errors, decoding failures, or missing resources in a robust way.
-
----
+# ErrorHandling
 
 Most cache operations in the library are marked as `async throws`:
 
@@ -72,4 +68,4 @@ _ = try? await cache.stash(item, duration: .short)
 
 - <doc:FileSystemCache>
 - <doc:VolatileCache>
-- <doc:UsingWithDependencies>
+- <doc:DependencyInjection>

@@ -1,6 +1,6 @@
 # VolatileCache
 
-`VolatileCache` is an in-memory cache implementation included in the `Cache` library. It is designed for fast, ephemeral data storage that does not persist across application launches.
+An in-memory cache implementation. It is designed for fast, ephemeral data storage that does not persist across application launches.
 
 ---
 
@@ -76,4 +76,3 @@ For persistent caching, consider `FileSystemCache`.
 
 - <doc:FileSystemCache>
 - <doc:Expiry>
-- <doc:TestingExpiry>

@@ -1,6 +1,6 @@
 # Examples
 
-This article contains practical examples of using the `Cache` library with both `VolatileCache` and `FileSystemCache`, covering common operations such as storing, retrieving, injecting, and testing cached values.
+Practical examples of using the `Cache` library with both `VolatileCache` and `FileSystemCache`, covering common operations such as storing, retrieving, injecting, and testing cached values.
 
 ---
 
@@ -76,7 +76,6 @@ struct SportManager {
 
 ## Related Articles
 
-- <doc:UsingWithDependencies>
+- <doc:DependencyInjection>
 - <doc:FileSystemCache>
 - <doc:VolatileCache>
-- <doc:TestingExpiry>

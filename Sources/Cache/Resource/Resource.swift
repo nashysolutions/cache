@@ -10,8 +10,7 @@ import Foundation
 /// A lightweight wrapper that associates an identifiable item with an expiry date,
 /// without requiring the item to conform to `Codable`.
 ///
-/// `Resource` is used to track in-memory items with a defined expiration deadline. It conforms to
-/// ``ExpiringResource``, enabling expiry-based lifecycle checks in caching systems.
+/// `Resource` is used to track in-memory items with a defined expiration deadline.
 ///
 /// This type supports hashing and equality based on the wrapped item’s identifier, not the full item or expiry.
 public struct Resource<Item: Identifiable>: ExpiringResource, Hashable {

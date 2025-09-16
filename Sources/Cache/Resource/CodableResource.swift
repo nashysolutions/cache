@@ -10,8 +10,7 @@ import Foundation
 /// A codable variant of ``Resource`` that wraps an identifiable and codable item.
 ///
 /// `CodableResource` is designed for use in persistent or serialisable storage contexts, such as
-/// file system or database-backed caches. It conforms to ``ExpiringResource``, enabling it to
-/// participate in expiry-based lifecycle management.
+/// file system or database-backed caches.
 ///
 /// Equality and hashing are based on the wrapped item's identifier, not the full item or expiry date.
 public struct CodableResource<Item: Identifiable & Codable>: ExpiringResource, Codable, Hashable {

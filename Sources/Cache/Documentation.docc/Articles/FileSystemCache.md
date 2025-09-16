@@ -1,6 +1,6 @@
 # FileSystemCache
 
-`FileSystemCache` is a disk-backed cache implementation in the `Cache` library that stores Codable resources in the file system. It provides persistence across application launches and can be used to cache data in a way that survives app terminations and restarts.
+A disk-backed cache implementation that stores Codable resources in the file system. It provides persistence across application launches and can be used to cache data in a way that survives app terminations and restarts.
 
 ---
 

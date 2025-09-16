@@ -1,4 +1,4 @@
-# Using with Dependencies
+# DependencyInjection
 
 Learn how to integrate the `Cache` library with Pointfree's dependencies library.
 
