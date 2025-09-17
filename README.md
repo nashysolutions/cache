@@ -13,7 +13,7 @@
 - 📦 Two interchangeable storage implementations:
   - `VolatileCache`: fast in-memory storage
   - `FileSystemCache`: persistent, file-backed storage
-- ⏱ Expiry support: `.short` or `.custom(Date)`
+- 💡 Expiry support: `.short` or `.custom(Date)`
 - 🧪 Testable without delays (no need for `sleep`)
 - 🕹 Native async/await support. Fully thread safe and sendable.
 - 🧩 Easily injectable via `swift-dependencies`
@@ -22,55 +22,47 @@
 
 ## Usage
 
-### Volatile (in-memory) caching
+See the QuickStart guide in the `Documentation.docc` catalogue.
+
+### Example
 
 ```swift
-let cache = VolatileCache<MyModel>()
+struct Cheese: Identifiable {
+    let id: Int
+    let name: String
+}
 
-try await cache.stash(MyModel(id: "a", name: "Temp"), duration: .short)
-
-let item = try await cache.resource(for: "a")
-```
-
-### File-backed persistent caching
-
-```swift
-let cache = try FileSystemCache<MyModel>(directory: .caches, "games")
-
-try await cache.stash(MyModel(id: "b", name: "something"), duration: .custom(.distantFuture))
-
-let item = try await cache.resource(for: "b")
+let cache = VolatileCache<Cheese>()
+try await cache.stash(Cheese(id: 0, name: "Brie"), duration: .short)
 ```
 
 ---
 
-## Dependency Injection
+### Dependency Injection
 
-If you're using [`swift-dependencies`](https://github.com/pointfreeco/swift-dependencies), you can expose your preferred cache type as a dependency:
+An example using [`swift-dependencies`](https://github.com/pointfreeco/swift-dependencies).
 
 ```swift
 import Dependencies
 import Cache
 
 extension DependencyValues {
-    /// A cache for storing and retrieving `Sport` models.
-    var sportCache: any Cache<Sport> {
-        get { self[SportCacheKey.self] }
-        set { self[SportCacheKey.self] = newValue }
+
+    /// A cache for storing and retrieving `Cheese` models.
+    var cheeseCache: any Cache<Cheese> {
+        get { self[CheeseCacheKey.self] }
+        set { self[CheeseCacheKey.self] = newValue }
     }
 }
 
-private enum SportCacheKey: DependencyKey {
-    static let liveValue: any Cache<Sport> = FileSystemCache(
-        directory: .caches,
-        subfolder: "sports"
-    )
+private enum CheeseCacheKey: DependencyKey {
+    static let liveValue: any Cache<Cheese> = FileSystemCache(.caches, subfolder: "Cheeses")
 }
 ```
 
 Then use it like this:
 
 ```swift
-@Dependency(\.sportCache) var sportCache
-let sport = try await sportCache.resource(for: id)
+@Dependency(\.cheeseCache) var cheeseCache
+let cheese = try await cheeseCache.resource(for: id)
 ```
