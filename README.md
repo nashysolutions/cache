@@ -63,6 +63,42 @@ private enum CheeseCacheKey: DependencyKey {
 Then use it like this:
 
 ```swift
-@Dependency(\.cheeseCache) var cheeseCache
-let cheese = try await cheeseCache.resource(for: id)
-```
+struct MyModel {
+
+    @Dependency(\.cheeseCache) var cheeseCache
+
+    fucn loadCheese(id: Int) throws -> Cheese? {
+        try await cheeseCache.resource(for: id)
+    }
+}
+
+#Preview {
+    withDependencies {
+        $0.cheeseCache = MockCache()
+    } operation: {
+        ContentView()
+    }
+
+}
+
+private actor MockCache: Cache {
+    
+    private var store: [Int: Cheese] = [:]
+
+    func stash(_ item: Cheese, duration: Expiry) async throws {
+        // Ignore `duration` for now; just stash in memory
+        store[item.id] = item
+    }
+
+    func removeResource(for identifier: Int) async throws {
+        store.removeValue(forKey: identifier)
+    }
+
+    func resource(for identifier: Int) async throws -> Cheese? {
+        store[identifier]
+    }
+
+    func reset() async throws {
+        store.removeAll()
+    }
+}
