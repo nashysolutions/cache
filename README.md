@@ -27,13 +27,13 @@ See the QuickStart guide in the `Documentation.docc` catalogue.
 ### Example
 
 ```swift
-struct Cheese: Identifiable {
-    let id: Int
+struct Cheese: Identifiable, Sendable {
+    let id: UUID
     let name: String
 }
 
 let cache = VolatileCache<Cheese>()
-try await cache.stash(Cheese(id: 0, name: "Brie"), duration: .short)
+try await cache.stash(Cheese(id: UUID(), name: "Brie"), duration: .short)
 ```
 
 ---
@@ -67,38 +67,60 @@ struct MyModel {
 
     @Dependency(\.cheeseCache) var cheeseCache
 
-    fucn loadCheese(id: Int) throws -> Cheese? {
+    func loadCheese(id: UUID) throws -> Cheese? {
         try await cheeseCache.resource(for: id)
     }
 }
 
 #Preview {
     withDependencies {
-        $0.cheeseCache = MockCache()
+        $0.cheeseCache = VolatileCache<Cheese>()
     } operation: {
         ContentView()
     }
 
 }
+```
 
-private actor MockCache: Cache {
-    
-    private var store: [Int: Cheese] = [:]
+## Note
 
-    func stash(_ item: Cheese, duration: Expiry) async throws {
-        // Ignore `duration` for now; just stash in memory
-        store[item.id] = item
-    }
+I highly recommend the library [Tagged](https://github.com/pointfreeco/swift-tagged) in conjunction with this library. Because it allows you to create type-safe identifiers that prevent mixing up IDs between different models — a common source of subtle bugs when using plain UUIDs or Strings.
 
-    func removeResource(for identifier: Int) async throws {
-        store.removeValue(forKey: identifier)
-    }
+For example, instead of this:
 
-    func resource(for identifier: Int) async throws -> Cheese? {
-        store[identifier]
-    }
-
-    func reset() async throws {
-        store.removeAll()
-    }
+```swift
+struct Fruit: Identifiable, Sendable {
+    let id: UUID
+    let name: String
 }
+
+func loadCheese(id: UUID) async throws -> Cheese? {
+    try await cheeseCache.resource(for: id)
+}
+```
+
+You can write this 
+
+```swift
+import Tagged
+
+struct Fruit: Identifiable, Sendable {
+    let id: Id
+    let name: String
+    
+    typealias Id = Tagged<Fruit, UUID>
+}
+
+struct Cheese: Identifiable, Sendable {
+    let id: Id
+    let name: String
+    
+    typealias Id = Tagged<Cheese, UUID>
+}
+
+func loadCheese(id: Cheese.Id) async throws -> Cheese? {
+    try await cheeseCache.resource(for: id)
+}
+```
+
+Now the compiler prevents you from accidentally passing a Fruit.Id where a Cheese.Id is expected — offering stronger guarantees and clearer intent throughout your codebase.
