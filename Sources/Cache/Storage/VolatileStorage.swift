@@ -13,10 +13,7 @@ import Foundation
 /// for fast insertions, removals, and lookups of identifiable resources.
 /// It is useful in scenarios like caching or temporary in-process storage.
 ///
-/// All operations are performed within the global `ResourceStorageActor` to ensure concurrency safety.
-///
 /// - Note: This storage does **not** persist across app launches.
-@ResourceStorageActor
 final class VolatileStorage<Item: Identifiable>: Storage {
     
     /// The type of resource stored in memory.

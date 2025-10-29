@@ -12,9 +12,7 @@ import Foundation
 /// `ResourceProvider` defines a common interface for interacting with a resource store,
 /// supporting operations such as saving, loading, and purging resources based on their identifier.
 ///
-/// This protocol is isolated to the `ResourceStorageActor`, making it safe to use in concurrent contexts.
 /// Conforming types are expected to handle expired resources gracefully during lookup or removal.
-@ResourceStorageActor
 protocol ResourceProvider {
     
     /// The underlying identifiable item type associated with the stored resource.

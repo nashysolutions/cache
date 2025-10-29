@@ -13,8 +13,6 @@ import Files
 /// `FileSystemDatabase` conforms to ``Database`` and provides persistent storage using a ``FileSystemStorage`` backend.
 /// It is designed for use cases where resource data must survive app restarts or be shared between components.
 ///
-/// This database is safe for use in concurrent contexts through its `@ResourceStorageActor`-isolated `Database` conformance.
-///
 /// - Note: The wrapped item type must conform to both `Identifiable` and `Codable`.
 struct FileSystemDatabase<Item: Identifiable & Codable>: Database {
 

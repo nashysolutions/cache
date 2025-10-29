@@ -12,11 +12,7 @@ import Foundation
 /// `Storage` defines a minimal interface for managing `Resource` values associated with identifiable items.
 /// It is intended to be implemented by concrete types that store resources in memory, on disk, or via a remote backend.
 ///
-/// The `Storage` protocol is actor-isolated via `@ResourceStorageActor`, ensuring that conforming types
-/// are safe for use in concurrent contexts.
-///
 /// - Note: All conforming types must implement identity-based lookups and respect the identity of `Item`.
-@ResourceStorageActor
 protocol Storage {
     
     /// The type of items managed by the resource.

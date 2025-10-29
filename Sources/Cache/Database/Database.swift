@@ -13,10 +13,7 @@ import Foundation
 /// backed by a concrete implementation of ``Storage``. It provides lifecycle behaviours
 /// such as stashing, fetching, and automatic expiration handling.
 ///
-/// This protocol builds on top of ``ResourceProvider`` and is actor-isolated via ``ResourceStorageActor``.
-///
 /// - Note: Resources that have expired are automatically removed during access.
-@ResourceStorageActor
 protocol Database: ResourceProvider {
     
     /// The underlying storage provider used for storing resources.

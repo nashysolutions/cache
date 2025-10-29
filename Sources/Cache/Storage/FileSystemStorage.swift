@@ -16,10 +16,7 @@ import Files
 /// and retrieves `CodableResource` instances using a structured file system directory and
 /// optional subfolder path.
 ///
-/// This is a concurrency-safe, actor-isolated implementation using ``ResourceStorageActor``.
-///
 /// - Note: This storage requires items to conform to both `Identifiable` and `Codable`.
-@ResourceStorageActor
 final class FileSystemStorage<Item: Identifiable & Codable>: CodableStorage {
     
     /// The stored resource type used by this storage.
