@@ -17,7 +17,7 @@ import Files
 /// optional subfolder path.
 ///
 /// - Note: This storage requires items to conform to both `Identifiable` and `Codable`.
-final class FileSystemStorage<Item: Identifiable & Codable>: CodableStorage {
+final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableStorage {
     
     /// The stored resource type used by this storage.
     typealias StoredResource = CodableResource<Item>

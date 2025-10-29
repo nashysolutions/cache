@@ -13,7 +13,7 @@ import Foundation
 /// `Resource` is used to track in-memory items with a defined expiration deadline.
 ///
 /// This type supports hashing and equality based on the wrapped item’s identifier, not the full item or expiry.
-public struct Resource<Item: Identifiable>: ExpiringResource, Hashable {
+public struct Resource<Item: Identifiable & Sendable>: Sendable, ExpiringResource, Hashable {
 
     /// The wrapped item associated with this resource.
     public let item: Item

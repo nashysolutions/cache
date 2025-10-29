@@ -13,7 +13,7 @@ import Foundation
 /// It can be used to determine whether a resource is stale or still usable at the time of fetch.
 ///
 /// This is typically used in cache management or offline resource fetching systems.
-public enum Expiry {
+public enum Expiry: Sendable {
     
     /// Indicates a short-lived resource, typically valid for **1 minute** from now.
     case short

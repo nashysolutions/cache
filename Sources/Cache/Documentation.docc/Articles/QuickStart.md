@@ -9,7 +9,7 @@ Your model must conform to `Identifiable`. You have the option of a ``VolatileCa
 ```swift
 import Cache
 
-struct Cheese: Identifiable, Codable {
+struct Cheese: Identifiable, Sendable {
     let id: Int
     let name: String
 }

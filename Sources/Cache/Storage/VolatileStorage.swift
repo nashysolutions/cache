@@ -14,7 +14,7 @@ import Foundation
 /// It is useful in scenarios like caching or temporary in-process storage.
 ///
 /// - Note: This storage does **not** persist across app launches.
-final class VolatileStorage<Item: Identifiable>: Storage {
+final class VolatileStorage<Item: Identifiable & Sendable>: Storage {
     
     /// The type of resource stored in memory.
     typealias StoredResource = Resource<Item>

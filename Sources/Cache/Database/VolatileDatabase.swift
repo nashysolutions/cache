@@ -11,10 +11,8 @@ import Foundation
 ///
 /// `VolatileDatabase` manages resource caching entirely in memory and is suitable for ephemeral
 /// use cases such as testing, short-lived caches, or in-memory stores where persistence is not required.
-struct VolatileDatabase<Item: Identifiable>: Database {
+actor VolatileDatabase<Item: Identifiable & Sendable>: Database {
 
     /// The underlying in-memory storage provider.
     let storage = VolatileStorage<Item>()
-    
-    nonisolated init() {}
 }

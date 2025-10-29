@@ -18,7 +18,7 @@ import Files
 /// using the file system.
 ///
 /// - Note: This cache uses the identifier of each item as its filename.
-public struct FileSystemCache<Item: Identifiable & Codable>: DatabaseBackedCache {
+public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: DatabaseBackedCache where Item.ID: Sendable {
     
     /// The backing file system–based database.
     let database: FileSystemDatabase<Item>

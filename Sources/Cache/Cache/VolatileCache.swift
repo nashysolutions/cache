@@ -16,7 +16,7 @@ import Foundation
 /// when the internal storage exceeds its configured maximum size.
 ///
 /// - Note: This cache is entirely in-memory and will not retain data between app sessions.
-public struct VolatileCache<Item: Identifiable>: DatabaseBackedCache {
+public struct VolatileCache<Item: Identifiable & Sendable>: DatabaseBackedCache where Item.ID: Sendable {
 
     /// The backing volatile database used for storage.
     let database: VolatileDatabase<Item>

@@ -13,7 +13,7 @@ import Foundation
 /// supporting operations such as saving, loading, and purging resources based on their identifier.
 ///
 /// Conforming types are expected to handle expired resources gracefully during lookup or removal.
-protocol ResourceProvider {
+protocol ResourceProvider: Actor {
     
     /// The underlying identifiable item type associated with the stored resource.
     associatedtype Item: Identifiable

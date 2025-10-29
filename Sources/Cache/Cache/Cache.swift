@@ -15,8 +15,6 @@ import Foundation
 ///
 /// Conforming types are responsible for managing item expiry and storage lifecycle,
 /// and must not return expired items from the `resource(for:)` method.
-///
-/// - Note: This protocol is designed for use with Swift Concurrency.
 public protocol Cache<Item>: Sendable {
     
     /// The type of item being stored in the cache.

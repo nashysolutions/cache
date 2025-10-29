@@ -13,7 +13,7 @@ import Foundation
 /// file system or database-backed caches.
 ///
 /// Equality and hashing are based on the wrapped item's identifier, not the full item or expiry date.
-public struct CodableResource<Item: Identifiable & Codable>: ExpiringResource, Codable, Hashable {
+public struct CodableResource<Item: Identifiable & Codable & Sendable>: Sendable, ExpiringResource, Codable, Hashable {
     
     /// The wrapped codable item associated with this resource.
     public let item: Item

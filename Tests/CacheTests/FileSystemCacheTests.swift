@@ -24,8 +24,6 @@ struct FileSystemCacheTests {
     @Test("The makeStore closure captures the correct directory and subfolder")
     func testMakeStoreReceivesCorrectFolderArguments() async throws {
         
-        let folderStore = MockFileSystemFolderStore()
-        
         try await confirmation(
             "Expected makeStore to be called exactly once with `.temporary` and 'test-folder'",
             expectedCount: 1
@@ -34,6 +32,7 @@ struct FileSystemCacheTests {
             let client = FileSystemResourceClient(
                 makeStore: { directory, subfolder in
                     defer { confirmation() }
+                    let folderStore = MockFileSystemFolderStore()
                     #expect(directory == .temporary)
                     #expect(subfolder == "test-folder")
                     return folderStore
@@ -61,10 +60,11 @@ struct FileSystemCacheTests {
             return AnyResourceBox(resource)
         }
         
-        // And: a FileSystemCache using the mock store
+        // Create a nonisolated copy to avoid capturing a non-Sendable reference in a @Sendable closure
+        nonisolated(unsafe) let store = folderStore
         let cache: FileSystemCache<CodableTestValue> = withDependencies {
             $0.fileSystemResourceClient = .init(
-                makeStore: { _, _ in folderStore }
+                makeStore: { _, _ in store }
             )
         } operation: {
             .init(.temporary, subfolder: "test-folder")
@@ -80,3 +80,4 @@ struct FileSystemCacheTests {
         ])
     }
 }
+

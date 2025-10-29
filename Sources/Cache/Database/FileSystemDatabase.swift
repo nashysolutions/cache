@@ -14,7 +14,7 @@ import Files
 /// It is designed for use cases where resource data must survive app restarts or be shared between components.
 ///
 /// - Note: The wrapped item type must conform to both `Identifiable` and `Codable`.
-struct FileSystemDatabase<Item: Identifiable & Codable>: Database {
+actor FileSystemDatabase<Item: Identifiable & Codable & Sendable>: Database {
 
     /// The file system storage used to persist resources.
     let storage: FileSystemStorage<Item>
@@ -24,7 +24,7 @@ struct FileSystemDatabase<Item: Identifiable & Codable>: Database {
     /// - Parameters:
     ///   - fileSystemDirectory: The base directory where resources are stored.
     ///   - subfolder: An optional subfolder path under the base directory. Defaults to `nil`.
-    nonisolated init(
+    init(
         fileSystemDirectory: FileSystemDirectory,
         subfolder: String? = nil
     ) {
