@@ -32,15 +32,18 @@ See the **Quick Start** guide in the `Documentation.docc` catalogue.
 
 ```swift
 struct Cheese: Identifiable, Sendable {
-    let id: UUID
+    let id: String
     let name: String
 }
 
 let cache = VolatileCache<Cheese>()
-try await cache.stash(
-    Cheese(id: UUID(), name: "Brie"),
-    duration: .short
-)
+
+let id = UUID().uuidString
+let cheese = Cheese(id: id, name: "Brie")
+try await cache.stash(cheese, duration: .short)
+
+// Load using same id
+// let cheese = try await cache.resource(for: id)
 ```
 
 ---
