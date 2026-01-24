@@ -18,6 +18,15 @@ import Files
 /// using the file system.
 ///
 /// - Note: This cache uses the identifier of each item as its filename.
+///
+/// - Important: Prefer constructing `FileSystemCache` with the initializer that
+///   enforces `Item.ID: LosslessStringConvertible`. This enables a robust,
+///   deterministic, and filesystem-safe filename derivation strategy that hashes
+///   the identifier's textual representation. Favoring this path helps avoid
+///   unsafe characters, excessively long filenames, and leaking potentially
+///   sensitive identifier details through raw filenames. The deprecated
+///   initializer is retained for compatibility but will be removed in a future
+///   release.
 public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: DatabaseBackedCache where Item.ID: Sendable {
     
     /// The backing file system–based database.
@@ -28,11 +37,36 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
     /// - Parameters:
     ///   - fileSystemDirectory: The root directory in which resources will be stored.
     ///   - subfolder: An optional subfolder name used to scope the cache contents. Defaults to `nil`.
+    @available(*, deprecated, message: "Use the LosslessStringConvertible-constrained initializer. This initializer will be removed in a future release.", renamed: "init(_:subfolder:enforcingLosslessID:)")
     public init(
         _ fileSystemDirectory: FileSystemDirectory,
         subfolder: String? = nil
     ) {
         database = FileSystemDatabase<Item>(fileSystemDirectory: fileSystemDirectory, subfolder: subfolder)
+    }
+
+    /// Creates a new file system–backed cache.
+    ///
+    /// Favors the hash-based filename strategy and enforces that `Item.ID`
+    /// conforms to `LosslessStringConvertible` to maintain compatibility with
+    /// public API that relies on lossless identifiers while still using hashed
+    /// filenames for robustness.
+    ///
+    /// - Parameters:
+    ///   - fileSystemDirectory: The root directory in which resources will be stored.
+    ///   - subfolder: An optional subfolder name used to scope the cache contents. Defaults to `nil`.
+    ///   - enforcingLosslessID: A dummy parameter used to disambiguate this
+    ///     initializer and signal the `LosslessStringConvertible` constraint.
+    public init(
+        _ fileSystemDirectory: FileSystemDirectory,
+        subfolder: String? = nil,
+        enforcingLosslessID: Void = ()
+    ) where Item.ID: LosslessStringConvertible {
+        database = FileSystemDatabase<Item>(
+            fileSystemDirectory: fileSystemDirectory,
+            subfolder: subfolder,
+            enforcingLosslessID: ()
+        )
     }
 
     /// Stashes an item in the cache with a given expiry duration.

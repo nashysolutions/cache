@@ -24,7 +24,20 @@ public struct VolatileCache<Item: Identifiable & Sendable>: DatabaseBackedCache 
     /// Creates a new volatile cache instance.
     ///
     /// By default, it uses the `VolatileDatabase`'s default maximum record limit.
+    @available(*, deprecated, message: "Use the LosslessStringConvertible-constrained initializer. This initializer will be removed in a future release.", renamed: "init(enforcingLosslessID:)")
     public init() {
+        database = VolatileDatabase<Item>()
+    }
+
+    /// Creates a new volatile cache instance.
+    ///
+    /// Enforces that `Item.ID` conforms to `LosslessStringConvertible` for
+    /// consistency with file-system backed caches and databases.
+    ///
+    /// By default, it uses the `VolatileDatabase`'s default maximum record limit.
+    /// - Parameter enforcingLosslessID: A dummy parameter used to disambiguate this
+    ///   initializer and signal the `LosslessStringConvertible` constraint.
+    public init(enforcingLosslessID: Void = ()) where Item.ID: LosslessStringConvertible {
         database = VolatileDatabase<Item>()
     }
 
