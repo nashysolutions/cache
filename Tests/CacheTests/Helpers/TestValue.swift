@@ -7,20 +7,20 @@
 
 import Foundation
 
-struct TestValue: Identifiable {
+struct TestValue<Item: Codable & Sendable & Hashable>: Identifiable {
     
-    var id: Int {
+    var id: Item {
         count
     }
     
-    let count: Int
+    let count: Item
 }
 
-struct CodableTestValue: Identifiable, Codable {
+struct CodableTestValue<Item: Codable & Sendable & Hashable>: Identifiable, Codable {
     
-    var id: Int {
+    var id: Item {
         count
     }
     
-    let count: Int
+    let count: Item
 }
