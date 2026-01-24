@@ -7,6 +7,8 @@ A small, opinionated Swift cache for **predictable, testable, pull-based caching
 
 Designed for production iOS apps where correctness, determinism, and clarity matter more than clever eviction strategies.
 
+[Documentation](https://swiftpackageindex.com/nashysolutions/cache/main/documentation/cache)
+
 ---
 
 ## Why this exists
