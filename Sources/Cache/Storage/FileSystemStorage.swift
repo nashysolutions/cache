@@ -147,8 +147,7 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
         switch filenameStrategy {
         case .hash:
             let identifierString = String(describing: identifier)
-            let this = hash(identifierString)
-            return this
+            return hash(identifierString)
         case .plain:
             // Prefer the lossless representation if available; fall back to describing
             if let convertible = identifier as? any LosslessStringConvertible {
