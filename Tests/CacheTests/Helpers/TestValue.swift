@@ -7,20 +7,29 @@
 
 import Foundation
 
-struct TestValue<Item: Codable & Sendable & Hashable>: Identifiable {
+struct TestValue: Identifiable, LosslessStringConvertible, Sendable {
     
-    var id: Item {
-        count
+    let count: String
+
+    var id: String { count }
+
+    var description: String { count }
+
+    init(count: String) {
+        self.count = count
     }
-    
-    let count: Item
+
+    init?(_ description: String) {
+        guard !description.isEmpty else { return nil }
+        self.count = description
+    }
 }
 
-struct CodableTestValue<Item: Codable & Sendable & Hashable>: Identifiable, Codable {
+struct CodableTestValue: Identifiable, Codable {
     
-    var id: Item {
+    var id: String {
         count
     }
     
-    let count: Item
+    let count: String
 }

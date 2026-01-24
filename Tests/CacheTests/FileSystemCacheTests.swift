@@ -52,19 +52,19 @@ struct FileSystemCacheTests {
         // Given: a mock store that simulates a successful load for filenames like "5"
         let folderStore = MockFileSystemFolderStore()
         folderStore.loadHandler = { filename in
-            let item = CodableTestValue<String>(count: filename)
+            let item = CodableTestValue(count: filename)
             let resource = CodableResource(item: item, expiry: .now)
             return AnyResourceBox(resource)
         }
         
         // Create a nonisolated copy to avoid capturing a non-Sendable reference in a @Sendable closure
         nonisolated(unsafe) let store = folderStore
-        let cache: FileSystemCache<CodableTestValue<String>> = withDependencies {
+        let cache: FileSystemCache<CodableTestValue> = withDependencies {
             $0.fileSystemResourceClient = .init(
                 makeStore: { _, _ in store }
             )
         } operation: {
-            FileSystemCache(.temporary, subfolder: "test-folder", enforcingLosslessID: ())
+            FileSystemCache(.temporary, subfolder: "test-folder")
         }
         
         // When: removing a resource with ID 5

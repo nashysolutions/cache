@@ -18,7 +18,7 @@ import CryptoKit
 /// optional subfolder path.
 ///
 /// - Note: This storage requires items to conform to both `Identifiable` and `Codable`.
-final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableStorage {
+final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableStorage  where Item.ID: LosslessStringConvertible {
     
     /// The stored resource type used by this storage.
     typealias StoredResource = CodableResource<Item>
@@ -37,57 +37,17 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
     /// If specified, all resources will be scoped to this subfolder.
     private let subfolder: String?
     
-    /// Strategy for deriving filenames from identifiers.
-    private let filenameStrategy: FilenameStrategy
-    
-    /// Creates a new file system-backed storage instance.
-    ///
-    /// - Parameters:
-    ///   - fileSystemDirectory: The base file system directory.
-    ///   - subfolder: An optional subfolder path within the base directory.
-    @available(*, deprecated, message: "Use the LosslessStringConvertible-constrained initializer. This initializer will be removed in a future release.", renamed: "init(fileSystemDirectory:subfolder:enforcingLosslessID:)")
-    convenience init(fileSystemDirectory: FileSystemDirectory, subfolder: String?) {
-        self.init(
-            fileSystemDirectory: fileSystemDirectory,
-            subfolder: subfolder,
-            filenameStrategy: .hash
-        )
-    }
-
-    /// Creates a new file system-backed storage instance.
-    ///
-    /// Favors the hash-based filename strategy and enforces that `Item.ID`
-    /// conforms to `LosslessStringConvertible` to maintain compatibility with
-    /// public API that relies on lossless identifiers while still using hashed
-    /// filenames for robustness.
-    ///
-    /// - Parameters:
-    ///   - fileSystemDirectory: The base file system directory.
-    ///   - subfolder: An optional subfolder path within the base directory.
-    ///   - enforcingLosslessID: A dummy parameter used to disambiguate this
-    ///     initializer and signal the `LosslessStringConvertible` constraint.
-    convenience init(fileSystemDirectory: FileSystemDirectory, subfolder: String?, enforcingLosslessID: Void = ()) where Item.ID: LosslessStringConvertible {
-        self.init(
-            fileSystemDirectory: fileSystemDirectory,
-            subfolder: subfolder,
-            filenameStrategy: .hash
-        )
-    }
-    
     /// Creates a new file system-backed storage instance with a filename strategy.
     ///
     /// - Parameters:
     ///   - fileSystemDirectory: The base file system directory.
     ///   - subfolder: An optional subfolder path within the base directory.
-    ///   - filenameStrategy: Strategy for deriving filenames. Defaults to `.hash`.
-    private init(
+    public init(
         fileSystemDirectory: FileSystemDirectory,
-        subfolder: String?,
-        filenameStrategy: FilenameStrategy = .hash
+        subfolder: String?
     ) {
         self.fileSystemDirectory = fileSystemDirectory
         self.subfolder = subfolder
-        self.filenameStrategy = filenameStrategy
     }
     
     /// Returns the underlying file system store used for saving, loading, and deleting resources.
@@ -144,20 +104,8 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
     /// - Parameter identifier: The identifier of the item.
     /// - Returns: A string representing the filename.
     private func filename(for identifier: Item.ID) -> String {
-        switch filenameStrategy {
-        case .hash:
-            let identifierString = String(describing: identifier)
-            return hash(identifierString)
-        case .plain:
-            // Prefer the lossless representation if available; fall back to describing
-            if let convertible = identifier as? any LosslessStringConvertible {
-                return String(convertible)
-            } else {
-                // Safeguard: if not convertible, use hashed form to ensure a valid filename
-                let identifierString = String(describing: identifier)
-                return hash(identifierString)
-            }
-        }
+        let identifierString = String(describing: identifier)
+        return hash(identifierString)
     }
     
     /// Computes a filesystem-safe filename by hashing an identifier string.
@@ -188,16 +136,3 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
             .joined()
     }
 }
-
-/// Strategy for deriving a filename from an item's identifier.
-private enum FilenameStrategy {
-    /// Hash the identifier's textual description using SHA-256 and return a
-    /// lowercase hexadecimal string.
-    case hash
-
-    /// Use the identifier's lossless string representation when available for a
-    /// more readable filename; otherwise, fall back to the hashed form to ensure
-    /// filename safety.
-    case plain
-}
-

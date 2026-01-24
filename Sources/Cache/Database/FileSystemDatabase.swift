@@ -14,26 +14,10 @@ import Files
 /// It is designed for use cases where resource data must survive app restarts or be shared between components.
 ///
 /// - Note: The wrapped item type must conform to both `Identifiable` and `Codable`.
-actor FileSystemDatabase<Item: Identifiable & Codable & Sendable>: Database {
+actor FileSystemDatabase<Item: Identifiable & Codable & Sendable>: Database where Item.ID: LosslessStringConvertible {
 
     /// The file system storage used to persist resources.
     let storage: FileSystemStorage<Item>
-    
-    /// Creates a new file system-backed database.
-    ///
-    /// - Parameters:
-    ///   - fileSystemDirectory: The base directory where resources are stored.
-    ///   - subfolder: An optional subfolder path under the base directory. Defaults to `nil`.
-    @available(*, deprecated, message: "Use the LosslessStringConvertible-constrained initializer. This initializer will be removed in a future release.", renamed: "init(fileSystemDirectory:subfolder:enforcingLosslessID:)")
-    init(
-        fileSystemDirectory: FileSystemDirectory,
-        subfolder: String? = nil
-    ) {
-        self.storage = FileSystemStorage<Item>(
-            fileSystemDirectory: fileSystemDirectory,
-            subfolder: subfolder
-        )
-    }
 
     /// Creates a new file system-backed database.
     ///
@@ -45,17 +29,13 @@ actor FileSystemDatabase<Item: Identifiable & Codable & Sendable>: Database {
     /// - Parameters:
     ///   - fileSystemDirectory: The base directory where resources are stored.
     ///   - subfolder: An optional subfolder path under the base directory. Defaults to `nil`.
-    ///   - enforcingLosslessID: A dummy parameter used to disambiguate this
-    ///     initializer and signal the `LosslessStringConvertible` constraint.
     init(
         fileSystemDirectory: FileSystemDirectory,
-        subfolder: String? = nil,
-        enforcingLosslessID: Void = ()
+        subfolder: String? = nil
     ) where Item.ID: LosslessStringConvertible {
         self.storage = FileSystemStorage<Item>(
             fileSystemDirectory: fileSystemDirectory,
-            subfolder: subfolder,
-            enforcingLosslessID: ()
+            subfolder: subfolder
         )
     }
 }
