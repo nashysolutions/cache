@@ -129,11 +129,11 @@ Instead of this:
 
 ```swift
 struct Fruit: Identifiable, Sendable {
-    let id: UUID
+    let id: String
     let name: String
 }
 
-func loadCheese(id: UUID) async throws -> Cheese? {
+func loadCheese(id: String) async throws -> Cheese? {
     try await cheeseCache.resource(for: id)
 }
 ```
@@ -147,14 +147,14 @@ struct Fruit: Identifiable, Sendable {
     let id: Id
     let name: String
     
-    typealias Id = Tagged<Fruit, UUID>
+    typealias Id = Tagged<Fruit, String>
 }
 
 struct Cheese: Identifiable, Sendable {
     let id: Id
     let name: String
     
-    typealias Id = Tagged<Cheese, UUID>
+    typealias Id = Tagged<Cheese, String>
 }
 
 func loadCheese(id: Cheese.Id) async throws -> Cheese? {
