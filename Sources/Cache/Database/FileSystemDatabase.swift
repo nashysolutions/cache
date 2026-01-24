@@ -24,6 +24,7 @@ actor FileSystemDatabase<Item: Identifiable & Codable & Sendable>: Database {
     /// - Parameters:
     ///   - fileSystemDirectory: The base directory where resources are stored.
     ///   - subfolder: An optional subfolder path under the base directory. Defaults to `nil`.
+    @available(*, deprecated, message: "Use the LosslessStringConvertible-constrained initializer. This initializer will be removed in a future release.", renamed: "init(fileSystemDirectory:subfolder:enforcingLosslessID:)")
     init(
         fileSystemDirectory: FileSystemDirectory,
         subfolder: String? = nil
@@ -31,6 +32,30 @@ actor FileSystemDatabase<Item: Identifiable & Codable & Sendable>: Database {
         self.storage = FileSystemStorage<Item>(
             fileSystemDirectory: fileSystemDirectory,
             subfolder: subfolder
+        )
+    }
+
+    /// Creates a new file system-backed database.
+    ///
+    /// Favors the hash-based filename strategy and enforces that `Item.ID`
+    /// conforms to `LosslessStringConvertible` to maintain compatibility with
+    /// public API that relies on lossless identifiers while still using hashed
+    /// filenames for robustness.
+    ///
+    /// - Parameters:
+    ///   - fileSystemDirectory: The base directory where resources are stored.
+    ///   - subfolder: An optional subfolder path under the base directory. Defaults to `nil`.
+    ///   - enforcingLosslessID: A dummy parameter used to disambiguate this
+    ///     initializer and signal the `LosslessStringConvertible` constraint.
+    init(
+        fileSystemDirectory: FileSystemDirectory,
+        subfolder: String? = nil,
+        enforcingLosslessID: Void = ()
+    ) where Item.ID: LosslessStringConvertible {
+        self.storage = FileSystemStorage<Item>(
+            fileSystemDirectory: fileSystemDirectory,
+            subfolder: subfolder,
+            enforcingLosslessID: ()
         )
     }
 }

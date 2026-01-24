@@ -45,7 +45,28 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
     /// - Parameters:
     ///   - fileSystemDirectory: The base file system directory.
     ///   - subfolder: An optional subfolder path within the base directory.
+    @available(*, deprecated, message: "Use the LosslessStringConvertible-constrained initializer. This initializer will be removed in a future release.", renamed: "init(fileSystemDirectory:subfolder:enforcingLosslessID:)")
     convenience init(fileSystemDirectory: FileSystemDirectory, subfolder: String?) {
+        self.init(
+            fileSystemDirectory: fileSystemDirectory,
+            subfolder: subfolder,
+            filenameStrategy: .hash
+        )
+    }
+
+    /// Creates a new file system-backed storage instance.
+    ///
+    /// Favors the hash-based filename strategy and enforces that `Item.ID`
+    /// conforms to `LosslessStringConvertible` to maintain compatibility with
+    /// public API that relies on lossless identifiers while still using hashed
+    /// filenames for robustness.
+    ///
+    /// - Parameters:
+    ///   - fileSystemDirectory: The base file system directory.
+    ///   - subfolder: An optional subfolder path within the base directory.
+    ///   - enforcingLosslessID: A dummy parameter used to disambiguate this
+    ///     initializer and signal the `LosslessStringConvertible` constraint.
+    convenience init(fileSystemDirectory: FileSystemDirectory, subfolder: String?, enforcingLosslessID: Void = ()) where Item.ID: LosslessStringConvertible {
         self.init(
             fileSystemDirectory: fileSystemDirectory,
             subfolder: subfolder,
