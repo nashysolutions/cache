@@ -106,4 +106,3 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
         try await database.removeAll()
     }
 }
-

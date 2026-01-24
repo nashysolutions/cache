@@ -64,7 +64,7 @@ struct FileSystemCacheTests {
                 makeStore: { _, _ in store }
             )
         } operation: {
-            .init(.temporary, subfolder: "test-folder")
+            FileSystemCache(.temporary, subfolder: "test-folder", enforcingLosslessID: ())
         }
         
         // When: removing a resource with ID 5
