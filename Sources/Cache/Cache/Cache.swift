@@ -47,4 +47,15 @@ public protocol Cache<Item>: Sendable {
     ///
     /// - Throws: An error if the reset operation fails.
     func reset() async throws
+
+    /// Removes all expired resources from the cache.
+    ///
+    /// This method provides an explicit, opt-in cleanup mechanism for removing
+    /// expired entries in bulk. It is useful for consumers who want to trigger
+    /// cleanup at specific points (e.g., on app launch, logout, or low-storage events)
+    /// without relying on background or implicit cleanup.
+    ///
+    /// - Returns: The number of items removed.
+    /// - Throws: An error if the removal operation fails.
+    func removeExpired() async throws -> Int
 }

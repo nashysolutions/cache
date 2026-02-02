@@ -64,4 +64,12 @@ public struct VolatileCache<Item: Identifiable & Sendable>: DatabaseBackedCache 
     public func reset() async throws {
         try await database.removeAll()
     }
+
+    /// Removes all expired resources from the cache.
+    ///
+    /// - Returns: The number of items removed.
+    /// - Throws: An error if the removal operation fails.
+    public func removeExpired() async throws -> Int {
+        try await database.removeExpired()
+    }
 }

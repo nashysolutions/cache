@@ -59,4 +59,11 @@ final class VolatileStorage<Item: Identifiable & Sendable>: Storage {
         let predicate: (StoredResource) -> Bool = { $0.identifier == identifier }
         return storage.first(where: predicate)
     }
+
+    /// Returns all resources currently stored in memory.
+    ///
+    /// - Returns: An array of all stored resources.
+    func allResources() throws -> [StoredResource] {
+        Array(storage)
+    }
 }

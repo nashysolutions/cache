@@ -72,4 +72,23 @@ extension Database {
     func removeAll() throws {
         try storage.removeAll()
     }
+
+    /// Removes all expired resources from the database.
+    ///
+    /// This method iterates over all stored resources and removes those
+    /// whose expiry date has passed.
+    ///
+    /// - Returns: The number of resources removed.
+    /// - Throws: An error if the enumeration or removal fails.
+    func removeExpired() throws -> Int {
+        let resources = try storage.allResources()
+        var removedCount = 0
+        
+        for resource in resources where resource.isExpired {
+            try storage.remove(resource)
+            removedCount += 1
+        }
+        
+        return removedCount
+    }
 }
