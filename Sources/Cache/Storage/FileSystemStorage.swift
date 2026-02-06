@@ -90,6 +90,33 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
     func resource(for identifier: Item.ID) throws -> StoredResource? {
         try store.loadResource(filename: filename(for: identifier))
     }
+
+    /// Returns all resources currently stored on disk.
+    ///
+    /// This method enumerates all files in the storage folder, loads each resource,
+    /// and returns them as an array. Resources that fail to load (e.g., corrupted files)
+    /// are silently skipped.
+    ///
+    /// - Returns: An array of all loadable stored resources.
+    /// - Throws: An error if the folder cannot be accessed.
+    func allResources() throws -> [StoredResource] {
+        let folderURL = try store.folder.location
+        
+        guard FileManager.default.fileExists(atPath: folderURL.path) else {
+            return []
+        }
+        
+        let fileURLs = try FileManager.default.contentsOfDirectory(
+            at: folderURL,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        )
+        
+        return fileURLs.compactMap { fileURL -> StoredResource? in
+            let filename = fileURL.lastPathComponent
+            return try? store.loadResource(filename: filename)
+        }
+    }
     
     /// Constructs a filename from the given resource.
     ///

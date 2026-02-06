@@ -46,4 +46,13 @@ protocol Storage {
     /// - Returns: The resource if found, or `nil` if no matching resource exists.
     /// - Throws: An error if the lookup operation fails.
     func resource(for identifier: Item.ID) throws -> Resource?
+
+    /// Returns all resources currently stored.
+    ///
+    /// This method provides access to all stored resources regardless of their expiry status.
+    /// It is primarily intended for use by cleanup operations such as `removeExpired()`.
+    ///
+    /// - Returns: An array of all stored resources.
+    /// - Throws: An error if the enumeration operation fails.
+    func allResources() throws -> [Resource]
 }
