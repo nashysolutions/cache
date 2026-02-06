@@ -21,6 +21,7 @@ final class DummyAgent: FileSystemContext {
         case write
         case read
         case urlForDirectory
+        case contentsOfDirectory
     }
     
     private(set) var called: [Endpoint] = []
@@ -35,7 +36,8 @@ final class DummyAgent: FileSystemContext {
     var writeHandler: ((Data, URL, NSData.WritingOptions) throws -> Void)?
     var readHandler: ((URL) throws -> Data)?
     var urlForDirectoryHandler: ((FileSystemDirectory) throws -> URL)?
-    
+    var contentsOfDirectoryHandler: ((URL, [URLResourceKey], FileManager.DirectoryEnumerationOptions) throws -> [URL])?
+
     func fileExists(at url: URL) -> Bool {
         called.append(.fileExists)
         return fileExistsHandler?(url) ?? false
@@ -84,5 +86,10 @@ final class DummyAgent: FileSystemContext {
     func url(for directory: FileSystemDirectory) throws -> URL {
         called.append(.urlForDirectory)
         return try urlForDirectoryHandler?(directory) ?? URL(fileURLWithPath: "/dev/null")
+    }
+    
+    func contentsOfDirectory(at url: URL, includingPropertiesForKeys keys: [URLResourceKey], options: FileManager.DirectoryEnumerationOptions) throws -> [URL] {
+        called.append(.contentsOfDirectory)
+        return try contentsOfDirectoryHandler?(url, keys, options) ?? []
     }
 }

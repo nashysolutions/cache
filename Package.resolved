@@ -1,4 +1,5 @@
 {
+  "originHash" : "f99da6dd1a74ea8a2ecd00f0fd793b45e433ed6e30bde2eae22b86f46489c20b",
   "pins" : [
     {
       "identity" : "combine-schedulers",
@@ -14,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/nashysolutions/files.git",
       "state" : {
-        "revision" : "10c54b44a03d7977d0145fe98874cee140a4f1dc",
-        "version" : "2.2.1"
+        "revision" : "ceb5c4ed8354e52e6ec0c0d1a71842de49fd2787",
+        "version" : "3.0.0"
       }
     },
     {
@@ -23,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/nashysolutions/foundation-dependencies.git",
       "state" : {
-        "revision" : "682c5183ce44de88dbff35cd0bb7c40ca9e72c57",
-        "version" : "5.0.1"
+        "revision" : "8d8ee656c4f6753c0525945edda30466d10cffc0",
+        "version" : "6.0.0"
       }
     },
     {
@@ -82,5 +83,5 @@
       }
     }
   ],
-  "version" : 2
+  "version" : 3
 }
