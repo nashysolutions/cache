@@ -55,6 +55,12 @@ on that read. An empty entry, which is what a truncated write leaves behind, is 
 way. Nothing is reported to the caller, because there is nothing a caller can do with a payload
 that will never decode again, and leaving it in place would strand it on disk indefinitely.
 
+Deleting one of these is safe in a way that deleting an entry from an earlier layout is not,
+which is why the section below reaches the opposite conclusion about those. An entry inside
+`cache-v2` carrying a digest filename and the entry extension is provably one this package wrote,
+so an undecodable one is this package's own litter and clearing it up is not a guess about whose
+data it is. An entry from an earlier layout offers no such proof.
+
 Removal does not depend on decoding either. `removeResource(for:)` deletes by the filename the
 identifier derives, so it never reads the entry first.
 
