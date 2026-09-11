@@ -16,19 +16,19 @@ import Files
 
 @Suite("FileSystemCacheTests")
 struct FileSystemCacheTests {
-    
+
     /// Verifies that `FileSystemResourceClient.makeStore` is called with the expected
     /// directory and subfolder arguments.
     ///
     /// This test also confirms that the `makeStore` closure is executed exactly once.
     @Test("The makeStore closure captures the correct directory and subfolder")
     func testMakeStoreReceivesCorrectFolderArguments() async throws {
-        
+
         try await confirmation(
             "Expected makeStore to be called exactly once with `.temporary` and 'test-folder'",
             expectedCount: 1
         ) { confirmation in
-            
+
             let client = FileSystemResourceClient(
                 makeStore: { directory, subfolder in
                     defer { confirmation() }
@@ -38,25 +38,23 @@ struct FileSystemCacheTests {
                     return folderStore
                 }
             )
-            
+
             _ = try client.makeStore(.temporary, "test-folder")
         }
     }
-    
-    /// Tests that removing a resource:
-    /// 1. Loads the resource (to ensure it exists)
-    /// 2. Deletes it via the store
-    @Test("Removing a resource loads and deletes the file")
-    func testRemoveResourceCallsLoadAndDelete() async throws {
-        
-        // Given: a mock store that simulates a successful load for filenames like "5"
+
+    /// Tests that removing a resource deletes it without reading it first.
+    ///
+    /// The load is what a removal must not do: an entry whose stored payload no longer decodes
+    /// would be unremovable if removal depended on reading it. The mock has no `loadHandler`
+    /// here, so any attempt to read would fail outright rather than pass unnoticed.
+    @Test("Removing a resource deletes the file without loading it")
+    func testRemoveResourceDeletesWithoutLoading() async throws {
+
+        // Given: a mock store holding a file for every filename it is asked about
         let folderStore = MockFileSystemFolderStore()
-        folderStore.loadHandler = { filename in
-            let item = CodableTestValue(count: filename)
-            let resource = CodableResource(item: item, expiry: .now)
-            return AnyResourceBox(resource)
-        }
-        
+        folderStore.agent.fileExistsHandler = { _ in true }
+
         // Create a nonisolated copy to avoid capturing a non-Sendable reference in a @Sendable closure
         nonisolated(unsafe) let store = folderStore
         let cache: FileSystemCache<CodableTestValue> = withDependencies {
@@ -66,15 +64,11 @@ struct FileSystemCacheTests {
         } operation: {
             FileSystemCache(.temporary, subfolder: "test-folder")
         }
-        
+
         // When: removing a resource with ID 5
         try await cache.removeResource(for: "5")
-        
-        // Then: loadResource and deleteResource should both have been called
-        #expect(folderStore.called == [
-            .loadResource,     // ✅ load endpoint hit (mocked success so moves on to delete)
-            .deleteResource    // ✅ delete endpoint hit
-        ])
+
+        // Then: only deleteResource should have been called
+        #expect(folderStore.called == [.deleteResource])
     }
 }
-
