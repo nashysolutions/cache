@@ -9,7 +9,6 @@ import Foundation
 import FoundationDependencies
 import Dependencies
 import Files
-import CryptoKit
 
 /// A resource storage backend that persists data to the local file system.
 ///
@@ -17,9 +16,14 @@ import CryptoKit
 /// and retrieves `CodableResource` instances using a structured file system directory and
 /// optional subfolder path.
 ///
-/// Entries are written into a versioned folder below the configured directory and carry a
-/// recognisable extension, so this storage can identify its own files. See ``FileSystemLayout``
-/// for the shape and for why it is versioned.
+/// Entries are written into a folder scoped to both the layout version and the item type, and
+/// carry a recognisable extension, so this storage can identify its own files and cannot reach
+/// another item type's. See ``FileSystemLayout`` for the shape and for why it is scoped that way.
+///
+/// Every operation reads and writes through the file system context directly rather than through
+/// `Files`' resource operations. Those wrap each failure in an error type that is internal to
+/// `Files`, which a consumer cannot name and therefore cannot match on. Going through the context
+/// means the error a caller sees is the file system's own.
 ///
 /// - Note: This storage requires items to conform to both `Identifiable` and `Codable`.
 final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableStorage  where Item.ID: LosslessStringConvertible {
@@ -56,23 +60,33 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
 
     /// Returns the underlying file system store used for saving, loading, and deleting resources.
     ///
-    /// The store is scoped to the versioned folder described by ``FileSystemLayout``, so nothing
-    /// this storage saves, loads or deletes ever sits directly in the consumer's own directory.
+    /// The store is scoped to the type folder described by ``FileSystemLayout``, so nothing this
+    /// storage saves, loads or deletes ever sits directly in the consumer's own directory, or in
+    /// a folder shared with a cache over a different item type.
+    ///
+    /// It is rebuilt on every operation rather than held, so a directory that disappears between
+    /// operations is recreated on the next one. iOS purges the caches directory under disk
+    /// pressure, and a store held from construction would fail every write afterwards.
     ///
     /// - Throws: An error if the store could not be created.
     private var store: any FileSystemOperations {
         get throws {
-            // The enclosing folder is made as a separate step so that each level of the path is
-            // created one at a time. An agent whose `createDirectory` does not create intermediate
-            // directories would otherwise fail to create the versioned folder below it.
+            // Each level of the path is created as a separate step. An agent whose
+            // `createDirectory` does not create intermediate directories would otherwise fail to
+            // create the folders below it.
             _ = try fileSystemResourceClient.makeStore(
                 fileSystemDirectory,
                 subfolder
             )
 
-            return try fileSystemResourceClient.makeStore(
+            _ = try fileSystemResourceClient.makeStore(
                 fileSystemDirectory,
                 FileSystemLayout.versionedSubfolder(below: subfolder)
+            )
+
+            return try fileSystemResourceClient.makeStore(
+                fileSystemDirectory,
+                FileSystemLayout.typeScopedSubfolder(below: subfolder, for: Item.self)
             )
         }
     }
@@ -80,9 +94,15 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
     /// Inserts a resource into the file system.
     ///
     /// - Parameter resource: The resource to insert.
-    /// - Throws: An error if the resource could not be written to disk.
+    /// - Throws: An error if the resource could not be encoded or written to disk.
     func insert(_ resource: Resource) throws {
-        try store.saveResource(resource, filename: filename(for: resource))
+
+        let store = try store
+        let data = try FileSystemLayout.makeEntryEncoder().encode(resource)
+
+        try store.folder
+            .resource(filename: filename(for: resource))
+            .write(data: data, using: store.agent)
     }
 
     /// Removes the entry held for the given identifier, if there is one.
@@ -91,28 +111,32 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
     /// An entry whose payload no longer decodes is therefore removed exactly like any other,
     /// rather than being stuck on disk because reading it is what fails.
     ///
-    /// The existence check is what keeps an absent entry separate from a present one that cannot
-    /// be deleted: `deleteResource(filename:)` reports both as the same error.
+    /// The delete is attempted rather than guarded by an existence check. A check cannot tell an
+    /// absent entry from one it is not permitted to look for, so guarding on it reported a
+    /// permissions fault as an ordinary "nothing to remove". Attempting the delete and reading
+    /// the failure keeps the two apart: see ``reportsNothingThere(_:)``.
     ///
     /// - Parameter identifier: The identifier of the item whose entry should be removed.
-    /// - Throws: An error if an entry is present and could not be deleted. An identifier with no
-    ///   entry on disk is not an error.
+    /// - Throws: An error if an entry could not be deleted for any reason other than not being
+    ///   there. An identifier with no entry on disk is not an error.
     func remove(for identifier: Item.ID) throws {
 
         let store = try store
-        let name = filename(for: identifier)
+        let entry = store.folder.resource(filename: filename(for: identifier))
 
-        guard store.folder.resource(filename: name).exists(using: store.agent) else {
+        do {
+            try store.agent.deleteLocation(at: entry.location)
+        } catch let error where reportsNothingThere(error) {
             return
         }
-
-        try store.deleteResource(filename: name)
     }
 
     /// Removes every entry this storage wrote.
     ///
-    /// Only files matching the current layout are deleted. The enclosing folder, and anything
-    /// else inside it, is left alone, including files a consumer or another component put there.
+    /// Only files matching the current layout, inside this item type's own folder, are deleted.
+    /// The enclosing folders, and anything else inside them, are left alone, including files a
+    /// consumer or another component put there and entries belonging to a cache over a different
+    /// item type.
     ///
     /// - Throws: An error if the folder could not be enumerated, or an entry could not be deleted.
     func removeAll() throws {
@@ -135,35 +159,42 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
     ///   by keeping it, and leaving it would strand it on the consumer's disk for good. An entry
     ///   that is empty, which is what a truncated write leaves behind, fails to decode and is
     ///   treated the same way.
+    ///
+    ///   This is the step that needs the type scoping in ``FileSystemLayout``. "Does not decode"
+    ///   is also exactly what a different item type's entry looks like, so before entries were
+    ///   scoped by type, two caches sharing a directory deleted each other's data here.
     /// - **A failure to read an entry that is present.** Throws. A permissions or I/O fault is a
     ///   real fault, and reporting it as an ordinary cache miss would hide it.
     ///
-    /// The bytes are read and decoded here rather than through `loadResource(filename:)`,
-    /// because that call reports all three outcomes as one error type that is internal to
-    /// `Files`, so the distinction cannot be drawn from outside that package. Reading directly
-    /// also means the error a caller sees for a genuine fault is the file system's own, which a
-    /// caller can match on, rather than one it has no way to name.
+    /// The read is attempted rather than guarded by an existence check, for the reason given on
+    /// ``reportsNothingThere(_:)``: a directory that exists but cannot be searched answers an
+    /// existence check with "no", which turned a permissions fault into a miss.
+    ///
+    /// The bytes are decoded here rather than through `loadResource(filename:)`, because that
+    /// call reports all three outcomes as one error type that is internal to `Files`, so the
+    /// distinction cannot be drawn from outside that package.
     ///
     /// - Parameter identifier: The identifier of the item.
     /// - Returns: The stored resource, or `nil` if there is none to serve.
-    /// - Throws: An error if an entry is present but could not be read, or if an entry that does
-    ///   not decode could not be deleted.
+    /// - Throws: An error if an entry could not be read for any reason other than not being
+    ///   there, or if an entry that does not decode could not be deleted.
     func resource(for identifier: Item.ID) throws -> StoredResource? {
 
         let store = try store
-        let name = filename(for: identifier)
-        let entry = store.folder.resource(filename: name)
+        let entry = store.folder.resource(filename: filename(for: identifier))
 
-        guard entry.exists(using: store.agent) else {
+        let data: Data
+
+        do {
+            data = try entry.read(using: store.agent)
+        } catch let error where reportsNothingThere(error) {
             return nil
         }
-
-        let data = try entry.read(using: store.agent)
 
         guard let resource = try? FileSystemLayout
             .makeEntryDecoder()
             .decode(StoredResource.self, from: data) else {
-            try store.deleteResource(filename: name)
+            try store.agent.deleteLocation(at: entry.location)
             return nil
         }
 
@@ -180,41 +211,33 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
 
     /// Constructs a filename from the given identifier.
     ///
-    /// The hashed identifier carries the extension described by ``FileSystemLayout``, which is
-    /// what makes an entry recognisable as one this package wrote.
-    ///
     /// - Parameter identifier: The identifier of the item.
     /// - Returns: A string representing the filename.
     private func filename(for identifier: Item.ID) -> String {
-        let identifierString = String(describing: identifier)
-        return hash(identifierString) + "." + FileSystemLayout.entryFileExtension
+        FileSystemLayout.entryFilename(for: String(describing: identifier))
+    }
+}
+
+/// Whether an error reports that the thing operated on was not there.
+///
+/// This is what separates a miss from a fault, and it is deliberately narrow. Only Foundation's
+/// two not-found codes qualify; every other error, including every error a consumer-supplied
+/// `FileSystemContext` raises, is a fault and surfaces.
+///
+/// The narrowness is the whole point, and the codes were measured rather than remembered. When a
+/// directory exists but cannot be searched, Foundation reports a **permissions** error for a file
+/// that is not there, not a not-found error: `CocoaError` 257 on a read and 513 on a delete,
+/// where an ordinary absence gives 260 and 4. A rule that treated "cannot determine" as "not
+/// there" would therefore report an unreadable cache directory as an ordinary miss, for every
+/// identifier, forever. That is the laundering this function exists to prevent.
+///
+/// - Parameter error: The error a read or delete failed with.
+/// - Returns: `true` only if Foundation said the file was not there.
+private func reportsNothingThere(_ error: any Error) -> Bool {
+
+    guard let error = error as? CocoaError else {
+        return false
     }
 
-    /// Computes a filesystem-safe filename by hashing an identifier string.
-    ///
-    /// This function encodes the given `identifierString` as UTF-8, computes a
-    /// SHA-256 digest using CryptoKit, and returns the lowercase hexadecimal
-    /// representation. The result is stable for the same input and avoids
-    /// characters that may be invalid in filenames across platforms.
-    ///
-    /// - Important: This is not intended for security-sensitive uses like
-    ///   password hashing. It is used purely to derive a deterministic, compact
-    ///   filename from an identifier.
-    /// - Parameter identifierString: The textual representation of an item
-    ///   identifier to hash.
-    /// - Returns: A 64-character lowercase hex string of the SHA-256 digest.
-    /// - Precondition: The identifier must be encodable as UTF-8. A failure
-    ///   triggers a `preconditionFailure` because it indicates a programming
-    ///   error upstream (e.g., constructing an invalid identifier string).
-    private func hash(_ identifierString: String) -> String {
-        guard let data = identifierString.data(using: .utf8) else {
-            preconditionFailure(
-                "Unable to UTF-8 encode identifier string: \(identifierString)"
-            )
-        }
-
-        return SHA256.hash(data: data)
-            .map { String(format: "%02x", $0) }
-            .joined()
-    }
+    return error.code == .fileReadNoSuchFile || error.code == .fileNoSuchFile
 }

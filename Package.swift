@@ -11,17 +11,20 @@ let package = Package(
     products: [
         .library(
             name: "Cache",
-            targets: ["Cache"]),
+            targets: ["Cache"])
     ],
     dependencies: [
         .package(url: "https://github.com/nashysolutions/foundation-dependencies.git", .upToNextMinor(from: "6.0.0")),
+        .package(url: "https://github.com/nashysolutions/files.git", .upToNextMinor(from: "3.0.0")),
         .package(url: "https://github.com/pointfreeco/swift-dependencies.git", .upToNextMinor(from: "1.8.1"))
     ],
     targets: [
         .target(
             name: "Cache",
             dependencies: [
-                .product(name: "FoundationDependencies", package: "foundation-dependencies")
+                .product(name: "FoundationDependencies", package: "foundation-dependencies"),
+                .product(name: "Files", package: "files"),
+                .product(name: "Dependencies", package: "swift-dependencies")
             ]
         ),
         .testTarget(

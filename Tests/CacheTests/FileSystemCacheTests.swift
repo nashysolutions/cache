@@ -48,12 +48,17 @@ struct FileSystemCacheTests {
     /// The load is what a removal must not do: an entry whose stored payload no longer decodes
     /// would be unremovable if removal depended on reading it. The mock has no `loadHandler`
     /// here, so any attempt to read would fail outright rather than pass unnoticed.
+    ///
+    /// The delete is observed on the agent rather than on the store, because storage no longer
+    /// goes through `Files`' `deleteResource`. That call wraps every failure in an error type
+    /// internal to `Files`, which a consumer can neither name nor match on, so deletes now go
+    /// straight to the file system context. The store recording nothing is therefore part of what
+    /// is asserted here, not an omission.
     @Test("Removing a resource deletes the file without loading it")
     func testRemoveResourceDeletesWithoutLoading() async throws {
 
-        // Given: a mock store holding a file for every filename it is asked about
+        // Given: a mock store
         let folderStore = MockFileSystemFolderStore()
-        folderStore.agent.fileExistsHandler = { _ in true }
 
         // Create a nonisolated copy to avoid capturing a non-Sendable reference in a @Sendable closure
         nonisolated(unsafe) let store = folderStore
@@ -68,7 +73,8 @@ struct FileSystemCacheTests {
         // When: removing a resource with ID 5
         try await cache.removeResource(for: "5")
 
-        // Then: only deleteResource should have been called
-        #expect(folderStore.called == [.deleteResource])
+        // Then: the entry is deleted, and nothing reads it, and nothing asks whether it is there
+        #expect(folderStore.agent.called == [.deleteLocation])
+        #expect(folderStore.called == [])
     }
 }
