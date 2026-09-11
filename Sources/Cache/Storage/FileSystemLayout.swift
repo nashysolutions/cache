@@ -75,6 +75,22 @@ enum FileSystemLayout {
     /// The extension carried by every entry file in the current layout.
     static let entryFileExtension = "cache"
 
+    /// The part of an entry that decides whether it has expired, and nothing else.
+    ///
+    /// An entry's `item` is the consumer's type and stops decoding whenever that type changes
+    /// shape. Its `expiry` is this package's, written by ``makeEntryEncoder()`` in the record
+    /// format above, and keeps its shape when the item does not.
+    ///
+    /// The expired-entry sweep decodes only this, so that it can judge an entry whose item has
+    /// since changed shape. That entry is the one most likely to be sitting on disk expired and
+    /// unread: an app update that changes the item's shape leaves every existing entry
+    /// undecodable, and the read path clears such an entry only when its identifier is looked up
+    /// again, which after an update it may never be. A sweep that decoded the whole entry to
+    /// decide would skip exactly those.
+    struct EntryExpiry: Decodable {
+        let expiry: Date
+    }
+
     /// Creates an encoder that writes the record format described above.
     ///
     /// Paired with ``makeEntryDecoder()``, and stated beside it so that whoever changes one is

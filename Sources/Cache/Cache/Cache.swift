@@ -47,4 +47,25 @@ public protocol Cache<Item>: Sendable {
     ///
     /// - Throws: An error if the reset operation fails.
     func reset() async throws
+
+    /// Removes every expired entry, and reports how many were removed.
+    ///
+    /// Expiry is otherwise enforced on read: an expired entry is removed when its identifier is
+    /// next looked up, so an identifier that is never looked up again leaves its entry in storage
+    /// indefinitely. This is the explicit counterpart, for a consumer to call at a moment of their
+    /// choosing, such as launch, sign-out, or a low-storage warning. Nothing calls it on the
+    /// consumer's behalf, and no read or write triggers it.
+    ///
+    /// Every entry is judged against one instant, taken when the call begins, rather than against
+    /// a clock read per entry. An entry that expires while the sweep is running is left for the
+    /// next one, and two entries with the same expiry are never split by the sweep.
+    ///
+    /// The count is for a consumer that wants to log or test the sweep. One that calls it for
+    /// the side effect alone may ignore it.
+    ///
+    /// - Returns: The number of entries removed.
+    /// - Throws: An error if the entries could not be enumerated, or an expired entry could not
+    ///   be removed.
+    @discardableResult
+    func removeExpired() async throws -> Int
 }

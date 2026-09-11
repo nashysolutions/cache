@@ -57,4 +57,15 @@ protocol Storage {
     /// - Returns: The resource if one is held and can be served, or `nil` if not.
     /// - Throws: An error if the lookup operation fails.
     func resource(for identifier: Item.ID) throws -> Resource?
+
+    /// Removes every resource whose expiry precedes the given instant.
+    ///
+    /// The instant is supplied rather than read here, so that a sweep judges every resource
+    /// against one moment, and so that a test can choose the moment.
+    ///
+    /// - Parameter now: The instant to judge expiry against.
+    /// - Returns: The number of resources removed.
+    /// - Throws: An error if the resources could not be enumerated, or an expired resource could
+    ///   not be removed.
+    func removeExpired(asOf now: Date) throws -> Int
 }

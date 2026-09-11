@@ -81,4 +81,45 @@ struct VolatileCacheTests {
         let resource = try await cache.resource(for: identifier)
         #expect(resource == nil)
     }
+
+    @Test("removeExpired() removes the expired entries, keeps the rest, and reports how many went")
+    func removeExpiredRemovesOnlyExpiredEntries() async throws {
+        let cache = VolatileCache<TestValue>()
+        try await cache.stash(TestValue(count: "expired-a"), duration: .custom(Date().addingTimeInterval(-1)))
+        try await cache.stash(TestValue(count: "expired-b"), duration: .custom(Date().addingTimeInterval(-3600)))
+        try await cache.stash(TestValue(count: "live"), duration: .custom(Date().addingTimeInterval(3600)))
+
+        let removed = try await cache.removeExpired()
+
+        #expect(removed == 2)
+        #expect(try await cache.resource(for: "live")?.count == "live")
+    }
+
+    /// A read cannot show that the sweep removed an expired entry, because a read reports `nil`
+    /// for an expired entry either way. A second sweep can: an entry the first sweep only counted
+    /// would be counted again.
+    @Test("removeExpired() removes what it counts: a second sweep finds nothing")
+    func secondSweepFindsNothing() async throws {
+        let cache = VolatileCache<TestValue>()
+        try await cache.stash(TestValue(count: "expired"), duration: .custom(Date().addingTimeInterval(-1)))
+
+        #expect(try await cache.removeExpired() == 1)
+        #expect(try await cache.removeExpired() == 0)
+    }
+
+    @Test("removeExpired() reports zero when nothing has expired, and keeps everything")
+    func removeExpiredWithNothingExpiredReportsZero() async throws {
+        let cache = VolatileCache<TestValue>()
+        try await cache.stash(TestValue(count: "1"), duration: .long)
+        try await cache.stash(TestValue(count: "2"), duration: .long)
+
+        #expect(try await cache.removeExpired() == 0)
+        #expect(try await cache.resource(for: "1")?.count == "1")
+        #expect(try await cache.resource(for: "2")?.count == "2")
+    }
+
+    @Test("removeExpired() reports zero on an empty cache")
+    func removeExpiredOnEmptyCacheReportsZero() async throws {
+        #expect(try await VolatileCache<TestValue>().removeExpired() == 0)
+    }
 }

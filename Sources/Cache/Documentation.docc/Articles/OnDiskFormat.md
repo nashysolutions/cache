@@ -50,6 +50,24 @@ the default `subfolder: nil` that directory was the base directory, so calling `
 cache created as `FileSystemCache<Cheese>(.documents)` removed the app's entire `Documents`
 directory.
 
+## What `removeExpired()` deletes
+
+`removeExpired()` deletes files in the same place, by the same name test, with one more condition:
+the `expiry` the file carries precedes the moment the sweep began. It reports how many it deleted.
+
+Only the `expiry` is decoded to decide that, not the item. An entry whose item no longer decodes
+is therefore swept if it has expired. That is the common case after an app update changes the
+item's shape: every entry the previous version wrote stops decoding, the read path described
+below clears one only when its identifier is looked up again, and after an update it may never
+be. An entry whose `expiry` cannot be read either, such as an empty file, is left in place and
+not counted, because nothing says it has expired; the next lookup of its identifier clears it.
+
+Like `reset()`, it does not reach another item type's entries, a file you placed in the folder
+yourself, or anything written by an earlier layout.
+
+The sweep is not transactional. If deleting one entry fails, the error is thrown, and the entries
+deleted before it stay deleted.
+
 ## Entries that stop decoding
 
 An entry's body is readable only while the item's `Codable` shape still matches the shape that
