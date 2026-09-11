@@ -1,0 +1,126 @@
+//
+//  FileSystemLayout.swift
+//  cache
+//
+//  Created by Robert Nash on 11/09/2026.
+//
+
+import Foundation
+
+/// The on-disk layout that ``FileSystemCache`` writes, and the rules for recognising it.
+///
+/// The layout carries a version in its path so that a change to filename derivation, or to the
+/// record format, is visible on disk rather than silently stranding every existing entry. That
+/// is what happened in 6.0.0, which moved filenames from the identifier's description to a
+/// SHA-256 digest and left the earlier files unreadable, unexpirable and undeletable.
+///
+/// ## Shape
+///
+/// An entry lives at `<base>/[<subfolder>/]cache-v2/<digest>.cache`, where `<digest>` is the
+/// lowercase hexadecimal SHA-256 of the item identifier's description. The file itself is a
+/// `CodableResource` encoded by a default `JSONEncoder`: a JSON object with exactly the keys
+/// `item` and `expiry`, where `expiry` is a number of seconds since 1 January 2001.
+///
+/// ## Ownership
+///
+/// Both the folder component and the file extension are chosen by this package rather than by
+/// the consumer, so a file matching both is one this package wrote. That is what allows a cache
+/// to clear itself by deleting its own files, instead of deleting the directory it sits in.
+enum FileSystemLayout {
+
+    /// The folder, below any consumer-supplied subfolder, that holds the current layout.
+    ///
+    /// Change this whenever filename derivation or the record format changes, so that entries
+    /// written by the previous version stay recognisable instead of becoming invisible.
+    static let versionFolderName = "cache-v2"
+
+    /// The extension carried by every entry file in the current layout.
+    static let entryFileExtension = "cache"
+
+    /// The largest file the unversioned sweep will read in order to identify it.
+    ///
+    /// The sweep runs in a directory the consumer nominated and may share with other components,
+    /// so it has to read a candidate to know whether it is a cache entry. This limit keeps it
+    /// from pulling a large unrelated document into memory; anything above it is left in place.
+    static let unversionedInspectionByteLimit = 4 * 1024 * 1024
+
+    /// The path, relative to the base directory, that the current layout occupies.
+    ///
+    /// - Parameter subfolder: The consumer-supplied subfolder, if any.
+    /// - Returns: A subfolder path to hand to a file system store.
+    static func versionedSubfolder(below subfolder: String?) -> String {
+        guard let subfolder, subfolder.isEmpty == false else {
+            return versionFolderName
+        }
+        return subfolder + "/" + versionFolderName
+    }
+
+    /// Whether a filename is one this package wrote in the current layout.
+    ///
+    /// - Parameter filename: A filename with no leading path.
+    /// - Returns: `true` if the name is a lowercase SHA-256 digest carrying the entry extension.
+    static func isEntryFilename(_ filename: String) -> Bool {
+
+        guard filename.hasSuffix("." + entryFileExtension) else {
+            return false
+        }
+
+        let digest = filename.dropLast(entryFileExtension.count + 1)
+
+        guard digest.count == 64 else {
+            return false
+        }
+
+        return digest.allSatisfy { character in
+            character.isHexDigit && character.isUppercase == false
+        }
+    }
+}
+
+extension FileSystemLayout {
+
+    /// A probe that decodes only when the payload is exactly an entry from an unversioned layout.
+    ///
+    /// Every layout before ``FileSystemLayout/versionFolderName`` wrote entries straight into the
+    /// consumer's directory, under filenames derived from the item identifier: arbitrary text
+    /// before 6.0.0, a SHA-256 digest in 6.0.0. Neither shape can be distinguished from a file
+    /// the consumer put there, so a sweep that went by filename would be guessing. This probe
+    /// goes by contents instead, and matches only a JSON object whose keys are exactly `item`
+    /// and `expiry`, with `expiry` decodable as a date.
+    struct UnversionedRecord: Decodable {
+
+        /// A key that accepts whatever the payload contains, so that `allKeys` reports the
+        /// payload's real key set rather than only the keys this type expects.
+        private struct AnyKey: CodingKey {
+
+            let stringValue: String
+
+            var intValue: Int? { nil }
+
+            init?(stringValue: String) {
+                self.stringValue = stringValue
+            }
+
+            init?(intValue: Int) {
+                return nil
+            }
+        }
+
+        init(from decoder: any Decoder) throws {
+
+            let container = try decoder.container(keyedBy: AnyKey.self)
+            let keys = Set(container.allKeys.map(\.stringValue))
+
+            guard keys == ["item", "expiry"], let expiry = AnyKey(stringValue: "expiry") else {
+                throw DecodingError.dataCorrupted(
+                    DecodingError.Context(
+                        codingPath: decoder.codingPath,
+                        debugDescription: "Not an entry from an unversioned cache layout."
+                    )
+                )
+            }
+
+            _ = try container.decode(Date.self, forKey: expiry)
+        }
+    }
+}

@@ -17,26 +17,36 @@ import CryptoKit
 /// and retrieves `CodableResource` instances using a structured file system directory and
 /// optional subfolder path.
 ///
+/// Entries are written into a versioned folder below the configured directory and carry a
+/// recognisable extension, so this storage can identify its own files. See ``FileSystemLayout``
+/// for the shape and for why it is versioned.
+///
 /// - Note: This storage requires items to conform to both `Identifiable` and `Codable`.
 final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableStorage  where Item.ID: LosslessStringConvertible {
-    
+
     /// The stored resource type used by this storage.
     typealias StoredResource = CodableResource<Item>
-    
+
     /// The resource type exposed through the `Storage` protocol.
     typealias Resource = StoredResource
 
     /// The file system resource client used to interact with the underlying storage.
     @Dependency(\.fileSystemResourceClient) var fileSystemResourceClient
-    
+
     /// The base directory where resources will be stored.
     private let fileSystemDirectory: FileSystemDirectory
-    
+
     /// An optional subfolder under the base directory.
     ///
     /// If specified, all resources will be scoped to this subfolder.
     private let subfolder: String?
-    
+
+    /// Whether this instance has already looked for entries left behind by an earlier layout.
+    ///
+    /// The sweep is idempotent, so running it once per instance is enough; the flag only keeps
+    /// it off the path of every subsequent operation.
+    private var hasSweptUnversionedLayout = false
+
     /// Creates a new file system-backed storage instance with a filename strategy.
     ///
     /// - Parameters:
@@ -49,13 +59,33 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
         self.fileSystemDirectory = fileSystemDirectory
         self.subfolder = subfolder
     }
-    
+
     /// Returns the underlying file system store used for saving, loading, and deleting resources.
+    ///
+    /// The store is scoped to the versioned folder described by ``FileSystemLayout``, so nothing
+    /// this storage saves, loads or deletes ever sits directly in the consumer's own directory.
     ///
     /// - Throws: An error if the store could not be created.
     private var store: any FileSystemOperations {
         get throws {
-            try fileSystemResourceClient.makeStore(fileSystemDirectory, subfolder)
+            // The unversioned store is made first for two reasons. It is the directory the sweep
+            // runs in, and creating it as a separate step means each level of the path is created
+            // one at a time, so an agent whose `createDirectory` does not create intermediate
+            // directories continues to work.
+            let unversionedStore = try fileSystemResourceClient.makeStore(
+                fileSystemDirectory,
+                subfolder
+            )
+
+            if hasSweptUnversionedLayout == false {
+                hasSweptUnversionedLayout = true
+                sweepUnversionedLayout(in: unversionedStore)
+            }
+
+            return try fileSystemResourceClient.makeStore(
+                fileSystemDirectory,
+                FileSystemLayout.versionedSubfolder(below: subfolder)
+            )
         }
     }
 
@@ -66,7 +96,7 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
     func insert(_ resource: Resource) throws {
         try store.saveResource(resource, filename: filename(for: resource))
     }
-    
+
     /// Removes a specific resource from the file system.
     ///
     /// - Parameter resource: The resource to remove.
@@ -74,14 +104,76 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
     func remove(_ resource: Resource) throws {
         try store.deleteResource(filename: filename(for: resource))
     }
-    
-    /// Removes all stored resources by deleting the entire folder.
+
+    /// Removes every entry this storage wrote.
     ///
-    /// - Throws: An error if the folder could not be deleted.
+    /// Only files matching the current layout are deleted. The enclosing folder, and anything
+    /// else inside it, is left alone, including files a consumer or another component put there.
+    ///
+    /// - Throws: An error if the folder could not be enumerated, or an entry could not be deleted.
     func removeAll() throws {
-        try store.folder.deleteIfExists(using: store.agent)
+        try store.deleteFiles { entry in
+            entry.value(\.isRegularFile) == true
+            && FileSystemLayout.isEntryFilename(entry.url.lastPathComponent)
+        }
     }
-    
+
+    /// Deletes entries left behind by a layout that predates ``FileSystemLayout/versionFolderName``.
+    ///
+    /// Those entries are unreachable: a lookup computes a different path, so they are never read,
+    /// never expired and never removed, and they occupy the consumer's disk indefinitely. They sit
+    /// directly in the directory the consumer nominated, which this package does not own, so a
+    /// candidate is deleted only once its contents have been confirmed to be a cache record. A
+    /// file that cannot be read, or that is too large to inspect, is left where it is.
+    ///
+    /// Failures are deliberately swallowed. This is housekeeping, and a directory that cannot be
+    /// enumerated is a reason to skip the cleanup, not a reason for the cache itself to stop
+    /// working.
+    ///
+    /// - Parameter store: A store scoped to the directory the earlier layout wrote into.
+    private func sweepUnversionedLayout(in store: any FileSystemOperations) {
+
+        guard let entries = try? store.contents(
+            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
+            options: []
+        ) else {
+            return
+        }
+
+        let decoder = JSONDecoder()
+        var unversioned: Set<URL> = []
+
+        for entry in entries {
+
+            guard entry.value(\.isRegularFile) == true else {
+                continue
+            }
+
+            guard let size = entry.value(\.fileSize),
+                  size <= FileSystemLayout.unversionedInspectionByteLimit else {
+                continue
+            }
+
+            guard let data = try? store.loadData(named: entry.url.lastPathComponent) else {
+                continue
+            }
+
+            let record = try? decoder.decode(FileSystemLayout.UnversionedRecord.self, from: data)
+
+            if record != nil {
+                unversioned.insert(entry.url)
+            }
+        }
+
+        guard unversioned.isEmpty == false else {
+            return
+        }
+
+        _ = try? store.deleteFiles { entry in
+            unversioned.contains(entry.url)
+        }
+    }
+
     /// Retrieves a resource by its identifier, if one exists on disk.
     ///
     /// - Parameter identifier: The identifier of the item.
@@ -90,7 +182,7 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
     func resource(for identifier: Item.ID) throws -> StoredResource? {
         try store.loadResource(filename: filename(for: identifier))
     }
-    
+
     /// Constructs a filename from the given resource.
     ///
     /// - Parameter resource: The resource whose identifier is used as the filename.
@@ -98,16 +190,19 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
     private func filename(for resource: Resource) -> String {
         filename(for: resource.identifier)
     }
-    
+
     /// Constructs a filename from the given identifier.
+    ///
+    /// The hashed identifier carries the extension described by ``FileSystemLayout``, which is
+    /// what makes an entry recognisable as one this package wrote.
     ///
     /// - Parameter identifier: The identifier of the item.
     /// - Returns: A string representing the filename.
     private func filename(for identifier: Item.ID) -> String {
         let identifierString = String(describing: identifier)
-        return hash(identifierString)
+        return hash(identifierString) + "." + FileSystemLayout.entryFileExtension
     }
-    
+
     /// Computes a filesystem-safe filename by hashing an identifier string.
     ///
     /// This function encodes the given `identifierString` as UTF-8, computes a
