@@ -1,0 +1,92 @@
+# Runs the package's build and test suite on every pull request and on every
+# push to main, so a green suite on main is an observation rather than an
+# assumption.
+#
+# Deliberately no dependency or build cache. A restored .build directory can
+# let a job report success without compiling anything, which is the exact
+# failure this workflow exists to prevent.
+#
+# The runner image is pinned rather than left on `macos-latest`, which migrates
+# to a new OS gradually over one to two months. Xcode is left at the image
+# default and printed into the log, so every run records the toolchain it
+# actually used.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos:
+    name: swift build + swift test (macOS)
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Record the toolchain this run used
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      - name: swift build
+        run: swift build --build-tests
+
+      - name: swift test
+        run: swift test
+
+  ios-simulator:
+    name: xcodebuild test (iOS Simulator)
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Record the toolchain this run used
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      # The package declares iOS 16 support, and the simulator line-up changes
+      # with every runner image refresh. Resolving a device at run time keeps
+      # the destination from rotting the way a hard-coded device name would.
+      - name: Resolve an available iPhone simulator
+        id: simulator
+        run: |
+          set -euo pipefail
+          udid=$(xcrun simctl list devices available --json \
+            | jq -r '[.devices | to_entries[]
+                      | select(.key | test("SimRuntime[.]iOS"))
+                      | .value[]
+                      | select(.isAvailable and (.name | startswith("iPhone")))]
+                     | last | .udid')
+          if [ -z "$udid" ] || [ "$udid" = "null" ]; then
+            echo "No available iPhone simulator on this runner image." >&2
+            xcrun simctl list devices available >&2
+            exit 1
+          fi
+          xcrun simctl list devices available | grep "$udid"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+      # -skipMacroValidation: swift-dependencies brings swift-syntax macros,
+      # and xcodebuild otherwise stops to ask whether they may run, which no
+      # one can answer on a runner.
+      - name: xcodebuild test
+        run: |
+          xcodebuild test \
+            -scheme cache \
+            -destination "id=${{ steps.simulator.outputs.udid }}" \
+            -skipMacroValidation
