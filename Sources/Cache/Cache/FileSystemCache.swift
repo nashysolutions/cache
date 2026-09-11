@@ -16,8 +16,13 @@ import Files
 ///
 /// Resources are persisted as `CodableResource` values, allowing for serialisation and deserialisation
 /// using the file system.
+///
+/// Entries are written into a versioned folder below the directory you nominate, and never
+/// directly into it. The cache therefore only ever deletes files it wrote itself, and it never
+/// deletes a directory. See <doc:OnDiskFormat> for the layout and for what happens to entries
+/// written by an earlier version.
 public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: DatabaseBackedCache where Item.ID: Sendable & LosslessStringConvertible {
-    
+
     /// The backing file system–based database.
     let database: FileSystemDatabase<Item>
 
@@ -72,6 +77,9 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
     }
 
     /// Clears all cached items from the underlying storage.
+    ///
+    /// Only files this cache wrote are deleted. The directory you nominated, any subfolder you
+    /// nominated, and anything else inside either of them, are left untouched.
     ///
     /// - Throws: An error if the storage could not be cleared.
     public func reset() async throws {
