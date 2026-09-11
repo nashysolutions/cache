@@ -26,6 +26,21 @@ import Foundation
 /// Both the folder component and the file extension are chosen by this package rather than by
 /// the consumer, so a file matching both is one this package wrote. That is what allows a cache
 /// to clear itself by deleting its own files, instead of deleting the directory it sits in.
+///
+/// ## Entries written before this layout existed
+///
+/// They are left where they are. Nothing outside ``versionFolderName`` is ever deleted, including
+/// the entries that versions up to and including 6.0.0 wrote directly into the consumer's own
+/// directory.
+///
+/// Deleting them would need a way to tell them apart from the consumer's files, and the only
+/// property available is the contents, which is not a provenance. An entry is a JSON object with
+/// exactly the keys `item` and `expiry` and a numeric `expiry`, and so is any other TTL wrapper's
+/// record, and so is a consumer's own `{"item":"milk","expiry":3}`. Matching on that shape and
+/// deleting the match destroys the consumer's data, on a first install as readily as an upgrade,
+/// because nothing on disk says whether an earlier version was ever here. So do not reintroduce
+/// such a sweep. Orphaned entries occupying disk is the lesser fault, and it is the one this
+/// package accepts.
 enum FileSystemLayout {
 
     /// The folder, below any consumer-supplied subfolder, that holds the current layout.
@@ -36,13 +51,6 @@ enum FileSystemLayout {
 
     /// The extension carried by every entry file in the current layout.
     static let entryFileExtension = "cache"
-
-    /// The largest file the unversioned sweep will read in order to identify it.
-    ///
-    /// The sweep runs in a directory the consumer nominated and may share with other components,
-    /// so it has to read a candidate to know whether it is a cache entry. This limit keeps it
-    /// from pulling a large unrelated document into memory; anything above it is left in place.
-    static let unversionedInspectionByteLimit = 4 * 1024 * 1024
 
     /// The path, relative to the base directory, that the current layout occupies.
     ///
@@ -73,54 +81,6 @@ enum FileSystemLayout {
 
         return digest.allSatisfy { character in
             character.isHexDigit && character.isUppercase == false
-        }
-    }
-}
-
-extension FileSystemLayout {
-
-    /// A probe that decodes only when the payload is exactly an entry from an unversioned layout.
-    ///
-    /// Every layout before ``FileSystemLayout/versionFolderName`` wrote entries straight into the
-    /// consumer's directory, under filenames derived from the item identifier: arbitrary text
-    /// before 6.0.0, a SHA-256 digest in 6.0.0. Neither shape can be distinguished from a file
-    /// the consumer put there, so a sweep that went by filename would be guessing. This probe
-    /// goes by contents instead, and matches only a JSON object whose keys are exactly `item`
-    /// and `expiry`, with `expiry` decodable as a date.
-    struct UnversionedRecord: Decodable {
-
-        /// A key that accepts whatever the payload contains, so that `allKeys` reports the
-        /// payload's real key set rather than only the keys this type expects.
-        private struct AnyKey: CodingKey {
-
-            let stringValue: String
-
-            var intValue: Int? { nil }
-
-            init?(stringValue: String) {
-                self.stringValue = stringValue
-            }
-
-            init?(intValue: Int) {
-                return nil
-            }
-        }
-
-        init(from decoder: any Decoder) throws {
-
-            let container = try decoder.container(keyedBy: AnyKey.self)
-            let keys = Set(container.allKeys.map(\.stringValue))
-
-            guard keys == ["item", "expiry"], let expiry = AnyKey(stringValue: "expiry") else {
-                throw DecodingError.dataCorrupted(
-                    DecodingError.Context(
-                        codingPath: decoder.codingPath,
-                        debugDescription: "Not an entry from an unversioned cache layout."
-                    )
-                )
-            }
-
-            _ = try container.decode(Date.self, forKey: expiry)
         }
     }
 }

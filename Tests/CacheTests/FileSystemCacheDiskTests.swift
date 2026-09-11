@@ -110,42 +110,81 @@ struct FileSystemCacheDiskTests {
         #expect(regularFiles(under: root) == ["shared/cache-v2/\(digest).cache"])
     }
 
-    @Test("Entries written in the unversioned layout are swept on first use, and nothing else is")
-    func unversionedEntriesAreSweptOnFirstUse() async throws {
+    /// A file the consumer wrote must survive the cache being used, even when its contents happen
+    /// to have the same shape as a cache entry.
+    ///
+    /// Both fixtures below are ordinary application data: a shopping list, and a session token
+    /// with an expiry. Each is a JSON object whose keys are exactly `item` and `expiry` with a
+    /// numeric `expiry`, which is also the shape of a cache entry. Shape is not provenance.
+    /// Nothing about either file says this package wrote it, and any TTL wrapper writes the same
+    /// shape, so neither may be touched. This is a fresh directory with no earlier install, so
+    /// there is nothing here to clean up in the first place.
+    ///
+    /// A first-use sweep that identified its candidates by content shape deleted both on the
+    /// first `stash()`, silently, with no error and no opt-out. That sweep has been taken out,
+    /// and this test is what stops it, or anything like it, coming back.
+    @Test("A consumer's own JSON file shaped like a cache entry survives the cache being used")
+    func consumerFilesShapedLikeCacheEntriesSurviveFirstUse() async throws {
 
         let root = try makeSandbox()
         defer { try? FileManager.default.removeItem(at: root) }
 
         let manager = FileManager.default
-        let record = try unversionedRecordData(id: "orphan")
 
-        // A 6.0.0 entry: the filename is a SHA-256 hex digest, with no extension.
-        let digestNamed = root.appending(component: String(repeating: "a", count: 64))
-        try record.write(to: digestNamed)
+        // Sits directly in the base directory, which is the whole scope of a `subfolder: nil`
+        // cache. On `.documents` that scope is the app's entire Documents directory.
+        let shoppingList = root.appending(component: "shopping-list.json")
+        let shoppingListBody = Data(#"{"item":"milk","expiry":3}"#.utf8)
+        try shoppingListBody.write(to: shoppingList)
 
-        // A pre-6 entry: the filename is the identifier's description, so it has no
-        // recognisable shape at all. Only the file's contents identify it.
-        let descriptionNamed = root.appending(component: "orphan")
-        try record.write(to: descriptionNamed)
+        // Sits in the subfolder a second cache is scoped to. Key order is reversed and `item` is
+        // an object rather than a string, to show that neither is what would make a file foreign.
+        let shared = root.appending(component: "shared", directoryHint: .isDirectory)
+        try manager.createDirectory(at: shared, withIntermediateDirectories: true)
+        let session = shared.appending(component: "session.json")
+        let sessionBody = Data(#"{"expiry":1893456000,"item":{"token":"abc"}}"#.utf8)
+        try sessionBody.write(to: session)
 
-        // Files the cache never wrote. The second is JSON carrying both of the record's
-        // keys plus one more, so it is only spared by an exact-shape check.
-        let plainText = root.appending(component: "notes.txt")
-        try Data("hello".utf8).write(to: plainText)
-        let similarJSON = root.appending(component: "looks-similar.json")
-        try Data(#"{"item":1,"expiry":1,"extra":2}"#.utf8).write(to: similarJSON)
+        let baseCache = makeCache(root: root, subfolder: nil)
+        try await baseCache.stash(CodableTestValue(count: "1"), duration: .long)
+
+        let subfolderCache = makeCache(root: root, subfolder: "shared")
+        try await subfolderCache.stash(CodableTestValue(count: "2"), duration: .long)
+
+        #expect(manager.fileExists(atPath: shoppingList.path))
+        #expect(manager.fileExists(atPath: session.path))
+        #expect((try? Data(contentsOf: shoppingList)) == shoppingListBody)
+        #expect((try? Data(contentsOf: session)) == sessionBody)
+    }
+
+    /// Entries written before the versioned layout existed are orphaned, not cleaned up.
+    ///
+    /// This is the cost of the guard above: there is no property of such an entry that separates
+    /// it from a file the consumer wrote, so the package leaves it alone and leaks the disk. See
+    /// ``FileSystemLayout`` for why that trade is the right way round.
+    @Test("An entry from a layout before cache-v2 is left on disk, not cleaned up")
+    func entriesFromAnEarlierLayoutAreLeftOnDisk() async throws {
+
+        let root = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        // A 6.0.0 entry: the filename is a SHA-256 hex digest, with no extension, and the body
+        // is exactly what this package wrote back then.
+        let orphan = root.appending(component: String(repeating: "a", count: 64))
+        let body = try JSONEncoder().encode(
+            CodableResource(
+                item: CodableTestValue(count: "orphan"),
+                expiry: Date(timeIntervalSince1970: 1_700_000_000)
+            )
+        )
+        try body.write(to: orphan)
 
         let cache = makeCache(root: root, subfolder: nil)
         try await cache.stash(CodableTestValue(count: "42"), duration: .long)
+        try await cache.reset()
 
-        #expect(manager.fileExists(atPath: digestNamed.path) == false)
-        #expect(manager.fileExists(atPath: descriptionNamed.path) == false)
-        #expect(manager.fileExists(atPath: plainText.path))
-        #expect(manager.fileExists(atPath: similarJSON.path))
-
-        // The sweep must not have taken the entry written moments earlier with it.
-        let retrieved = try await cache.resource(for: "42")
-        #expect(retrieved?.count == "42")
+        #expect(FileManager.default.fileExists(atPath: orphan.path))
+        #expect((try? Data(contentsOf: orphan)) == body)
     }
 }
 
@@ -168,16 +207,6 @@ private func makeCache(root: URL, subfolder: String?) -> FileSystemCache<Codable
     } operation: {
         FileSystemCache(.documents, subfolder: subfolder)
     }
-}
-
-/// Bytes matching what 6.0.0 and earlier wrote for one entry: the resource encoded with a
-/// default `JSONEncoder`, which is what the `Files` package uses.
-private func unversionedRecordData(id: String) throws -> Data {
-    let resource = CodableResource(
-        item: CodableTestValue(count: id),
-        expiry: Date(timeIntervalSince1970: 1_700_000_000)
-    )
-    return try JSONEncoder().encode(resource)
 }
 
 /// Every regular file beneath `root`, as paths relative to it. Directories are excluded, so an
