@@ -115,7 +115,7 @@ enum FileSystemLayout {
     ///   - itemType: The item type the cache stores.
     /// - Returns: A subfolder path to hand to a file system store.
     static func typeScopedSubfolder(below subfolder: String?, for itemType: Any.Type) -> String {
-        versionedSubfolder(below: subfolder)
+        versionedSubfolder(below: subfolder) + "/" + typeFolderNmae(for: itemType)
     }
 
     /// The folder name that scopes one item type's entries.
