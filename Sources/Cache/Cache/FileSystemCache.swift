@@ -17,10 +17,25 @@ import Files
 /// Resources are persisted as `CodableResource` values, allowing for serialisation and deserialisation
 /// using the file system.
 ///
-/// Entries are written into a versioned folder below the directory you nominate, and never
-/// directly into it. The cache therefore only ever deletes files it wrote itself, and it never
-/// deletes a directory. See <doc:OnDiskFormat> for the layout and for what happens to entries
-/// written by an earlier version.
+/// Entries are written into a folder below the directory you nominate, scoped to both the layout
+/// version and `Item`, and never directly into the directory itself. The cache therefore only
+/// ever deletes files it wrote itself, and it never deletes a directory. See <doc:OnDiskFormat>
+/// for the layout and for what happens to entries written by an earlier version.
+///
+/// Two caches over different item types may share a directory, and a subfolder, without seeing
+/// each other. That isolation is structural rather than advisory: it comes from the path, so
+/// neither cache can read, overwrite, or clear the other's entries.
+///
+/// The initialiser touches no disk, and cannot fail. A directory that cannot be resolved,
+/// created or searched is therefore reported by the first operation that needs it, not by
+/// construction. This is deliberate: a directory that is usable when a cache is built can stop
+/// being usable afterwards, so a check at construction would be a guarantee this package could
+/// not keep.
+///
+/// - Important: On a non-sandboxed macOS process, `.documents` is the user's real `~/Documents`.
+///   A cache nominating it will create a folder there on first use. Before this package shipped a
+///   live file system client, that write silently went nowhere, so an app that nominated
+///   `.documents` and appeared to write nothing now writes something.
 public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: DatabaseBackedCache where Item.ID: Sendable & LosslessStringConvertible {
 
     /// The backing file system–based database.
@@ -78,8 +93,10 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
     /// longer decodes, which is what an item's changed `Codable` shape leaves behind after an app
     /// update, also reports `nil`, and is deleted rather than left on disk unreadable.
     ///
-    /// An error means the lookup could not be completed, such as a failure to read an entry that
-    /// is there. That is worth catching; a miss is not.
+    /// An error means the lookup could not be completed: a failure to read an entry that is
+    /// there, or a cache directory that cannot be created or searched. An identifier this cache
+    /// cannot look for is not the same as one it does not hold, so the former throws. That is
+    /// worth catching; a miss is not.
     ///
     /// - Parameter identifier: The identifier of the item.
     /// - Returns: The cached item, or `nil` if it does not exist, is expired, or can no longer
@@ -92,7 +109,8 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
     /// Clears all cached items from the underlying storage.
     ///
     /// Only files this cache wrote are deleted. The directory you nominated, any subfolder you
-    /// nominated, and anything else inside either of them, are left untouched.
+    /// nominated, anything else inside either of them, and the entries of any cache over a
+    /// different item type, are left untouched.
     ///
     /// - Throws: An error if the storage could not be cleared.
     public func reset() async throws {

@@ -38,14 +38,28 @@ import FoundationDependencies
 ///   delete theirs. Supplying a client through `withDependencies` is unaffected, and is the
 ///   supported way to substitute a different file system.
 ///
-/// ## What a test context gets
+/// ## Where the live value does not reach
 ///
-/// Still the mock. `swift-dependencies` resolves `testValue` in a test context whether or not a
-/// live value exists, and `testValue` is the same silent no-op it always was. A consumer writing
-/// an integration test against ``FileSystemCache`` must therefore either register a client of
-/// their own, or opt into the live context, or their writes go nowhere exactly as before. That is
-/// the one place the original trap survives, and it cannot be closed from this package, because
-/// `testValue` is declared in `foundation-dependencies` and only one declaration of it can exist.
+/// **A test context, and an Xcode preview.** Both still get the silent mock, and for the same
+/// underlying reason: the witness that decides is bound in `foundation-dependencies`, where the
+/// `TestDependencyKey` conformance is declared, and a retroactive `DependencyKey` conformance in
+/// this module cannot displace it.
+///
+/// - In a test context `swift-dependencies` resolves `testValue`, which exists and is the no-op
+///   mock, whatever else is true.
+/// - In a preview it resolves `previewValue`. `DependencyKey` supplies a default that returns
+///   `liveValue`, but `TestDependencyKey` supplies one that returns `testValue`, and the latter
+///   is the one already witnessed. `swift-dependencies` documents the rule on `DependencyKey`:
+///   a `previewValue` must be provided in the same module as the `TestDependencyKey` conformance.
+///   Measured on this branch: in a `.preview` context a stash succeeds, the read reports `nil`,
+///   and no directory is created.
+///
+/// The preview case is worth stating separately because a preview is a developer surface, not a
+/// harness. Someone building UI against a cache in a preview canvas has not opted into anything,
+/// and will see a cache that appears to work and serves nothing.
+///
+/// Neither can be closed from this package: both `testValue` and `previewValue` are witnessed in
+/// `foundation-dependencies`, and only one declaration of each can exist.
 extension FileSystemResourceClientKey: @retroactive DependencyKey {
 
     /// A store factory backed by ``FileManagerContext``.
@@ -62,7 +76,9 @@ extension FileSystemResourceClientKey: @retroactive DependencyKey {
     ///
     /// It also keeps the reporting rule that ``FileSystemCache/resource(for:)`` already follows.
     /// A miss reports `nil` and an entry that no longer decodes reports `nil`, because neither is
-    /// a fault. A cache directory that cannot be created is a fault, so it throws.
+    /// a fault. A cache directory that cannot be created is a fault, so it throws, and so is one
+    /// that exists but cannot be searched: an identifier this cache cannot look for is not the
+    /// same as one it does not hold.
     public static let liveValue = FileSystemResourceClient { directory, subfolder in
         try FileSystemFolderStore(
             agent: FileManagerContext(),

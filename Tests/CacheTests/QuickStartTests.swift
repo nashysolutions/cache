@@ -117,7 +117,7 @@ struct QuickStartTests {
         }
     }
 
-    /// Pins the warning the article gives about a test context, which is the one place the
+    /// Pins the warning the article gives about a test context, one of the two places the
     /// original trap survives its own fix.
     ///
     /// `swift-dependencies` resolves `testValue` inside a test whether or not a live value exists,
@@ -140,6 +140,41 @@ struct QuickStartTests {
         defer { try? FileManager.default.removeItem(at: root) }
 
         let cache = FileSystemCache<Cheese>(.temporary, subfolder: subfolder)
+
+        try await cache.stash(Cheese(id: 1, name: "Brie"), duration: .long)
+
+        #expect(try await cache.resource(for: 1) == nil)
+        #expect(FileManager.default.fileExists(atPath: root.path) == false)
+    }
+
+    /// The second place, and the one that matters more, because nobody opts into it.
+    ///
+    /// A preview resolves `previewValue`. `DependencyKey` supplies a default returning
+    /// `liveValue`, so declaring a live value looks like it should be enough, and it is not: the
+    /// witness is already bound by `TestDependencyKey`'s own default, which returns `testValue`,
+    /// at the conformance site in `foundation-dependencies`. `swift-dependencies` states the rule
+    /// on `DependencyKey`: a `previewValue` must be supplied in the same module as the
+    /// `TestDependencyKey` conformance.
+    ///
+    /// So a developer building UI in a preview canvas, who has opted into no harness at all, gets
+    /// a cache that appears to work and serves nothing. The article warns about it; this is what
+    /// makes the warning checkable.
+    ///
+    /// As above, a failure here means the situation improved upstream and the article is now
+    /// wrong, not that this package regressed.
+    @Test("In a preview with nothing registered, the cache keeps nothing either")
+    func fileSystemCacheKeepsNothingInAPreview() async throws {
+
+        let subfolder = "cache-quickstart-tests-\(UUID().uuidString)"
+        let root = FileManager.default.temporaryDirectory
+            .appending(component: subfolder, directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let cache = withDependencies {
+            $0.context = .preview
+        } operation: {
+            FileSystemCache<Cheese>(.temporary, subfolder: subfolder)
+        }
 
         try await cache.stash(Cheese(id: 1, name: "Brie"), duration: .long)
 

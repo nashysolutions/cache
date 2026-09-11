@@ -18,11 +18,19 @@ import Files
 /// context through `fileSystemResourceClient`, and a consumer who does not should never have to
 /// name this type.
 ///
-/// Every operation is `FileManager`'s own, so every failure is `FileManager`'s own error, which a
-/// caller can match on. Nothing here converts a failure into a success, and nothing here checks
-/// for a condition the caller has already checked: a delete for a path that is not there throws,
-/// rather than quietly reporting success. That matches the sandbox agent the on-disk tests run
-/// against, so the behaviour those tests pin is the behaviour a shipping app gets.
+/// Every operation is `FileManager`'s own, so every failure raised here is `FileManager`'s own
+/// error. That is only worth anything if nothing re-wraps it on the way out, which for a while
+/// was not true: ``FileSystemStorage`` used to write and delete through `Files`' resource
+/// operations, and those wrap a failure in an error type internal to `Files` that a consumer
+/// cannot name. Storage now goes through this context for every operation, so what a caller
+/// catches is what `FileManager` raised.
+///
+/// Nothing here converts a failure into a success, and nothing here checks for a condition the
+/// caller has already checked: a delete for a path that is not there throws, rather than quietly
+/// reporting success. Deciding whether that means "nothing to do" or "something is wrong" belongs
+/// to the caller, which is why ``FileSystemStorage`` classifies the error rather than asking this
+/// type to pre-empt it. That also matches the sandbox agent the on-disk tests run against, so the
+/// behaviour those tests pin is the behaviour a shipping app gets.
 struct FileManagerContext: FileSystemContext, Sendable {
 
     /// `FileManager.default` is reached through a computed property rather than stored, so this

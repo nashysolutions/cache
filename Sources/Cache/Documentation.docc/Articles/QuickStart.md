@@ -49,7 +49,19 @@ layout, and for what this package will and will not delete.
 
 A lookup for an identifier you have not stashed reports `nil` rather than throwing, and so does an
 entry whose stored payload no longer decodes. An error means the operation could not be completed:
-a cache directory that cannot be created, or an entry that is there but cannot be read.
+a cache directory that cannot be created or searched, or an entry that cannot be read. An
+identifier the cache cannot look for is not the same as one it does not hold, so the first throws
+and the second does not.
+
+The initialiser touches no disk and cannot fail, so an unusable directory is reported by the first
+operation that needs it, not by construction.
+
+Two caches over different item types can share a directory without seeing each other; the
+separation is in the path rather than in a convention, so neither can read, overwrite or clear the
+other's entries.
+
+> Important: on a non-sandboxed macOS process, `.documents` is the user's real `~/Documents`, and
+> a cache nominating it creates a folder there on first use.
 
 ## Supplying your own file system
 
@@ -75,19 +87,26 @@ let cache = withDependencies {
 library. The cache resolves its client when it is constructed, so it must be constructed inside
 the `operation` closure, not merely used there.
 
-## In a test
+## In a test, and in a preview
 
-`swift-dependencies` resolves a dependency's *test* value inside a test, whether or not a live
-value exists, and the test value for `fileSystemResourceClient` is a mock that accepts writes and
-keeps nothing. A test that exercises a ``FileSystemCache`` without saying otherwise will therefore
-see every lookup report `nil`, no matter what it stashed first.
+Neither a test run nor an Xcode preview reaches the real file system. In both, a `stash` succeeds,
+every lookup reports `nil` whatever you stashed first, no directory is created, and nothing warns
+you.
 
-Two ways out, depending on what you are testing:
+The cause is the same in both cases. `swift-dependencies` resolves a *test* value inside a test
+and a *preview* value inside a preview, and for `fileSystemResourceClient` both are witnessed in
+`foundation-dependencies` as a mock that accepts writes and keeps nothing. Declaring a live value,
+as this package does, does not displace either.
+
+The preview case is the one that catches people out, because a preview is somewhere you build UI
+rather than somewhere you opted into a harness.
+
+Two ways out, and which you want depends on what you are doing:
 
 - Supply your own client, as above. This is the right choice for a unit test, which should not be
   touching a real disk.
-- Opt into the live context, which is the right choice for an integration test that means to
-  exercise the real file system. Point it at a directory you are willing to have written to.
+- Opt into the live context, which is the right choice for an integration test, or for a preview
+  that means to exercise real storage. Point it at a directory you are willing to have written to.
 
 ```swift
 let cache = withDependencies {

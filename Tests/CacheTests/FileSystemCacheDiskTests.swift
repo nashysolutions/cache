@@ -94,6 +94,9 @@ struct FileSystemCacheDiskTests {
     /// Pins the path documented in <doc:OnDiskFormat>, spelled out here rather than read back from
     /// the source constants. Changing the layout without also changing the article, or without
     /// moving to a new version folder, fails here.
+    ///
+    /// The type component is part of what is pinned. It is not decoration: see
+    /// `FileSystemCacheCrossTypeTests` for what its absence did.
     @Test("An entry is written to the documented path")
     func entryIsWrittenToTheDocumentedPath() async throws {
 
@@ -103,11 +106,10 @@ struct FileSystemCacheDiskTests {
         let cache = makeCache(root: root, subfolder: "shared")
         try await cache.stash(CodableTestValue(count: "1"), duration: .long)
 
-        let digest = SHA256.hash(data: Data("1".utf8))
-            .map { String(format: "%02x", $0) }
-            .joined()
+        let type = sha256Hex(String(reflecting: CodableTestValue.self))
+        let digest = sha256Hex("1")
 
-        #expect(regularFiles(under: root) == ["shared/cache-v2/\(digest).cache"])
+        #expect(regularFiles(under: root) == ["shared/cache-v2/\(type)/\(digest).cache"])
     }
 
     /// A file the consumer wrote must survive the cache being used, even when its contents happen
@@ -283,6 +285,200 @@ struct FileSystemCacheMissTests {
     }
 }
 
+/// Exercises two caches over different item types sharing one directory.
+///
+/// This is the default configuration, not an exotic one: `subfolder` defaults to `nil`, so any
+/// two caches an app creates over the same base directory land in the same place.
+///
+/// Entries used to be named from the item identifier alone, so two item types with equal
+/// identifiers resolved to one file. The damage was not a stale read. Each cache overwrote the
+/// other's entry, and each then failed to decode what it found, which is the exact condition the
+/// self-healing delete acts on, so both entries were destroyed and both caches served nothing
+/// from then on, permanently and without an error.
+@Suite("FileSystemCache across item types")
+struct FileSystemCacheCrossTypeTests {
+
+    @Test("Two item types with the same identifier keep separate entries")
+    func differentItemTypesDoNotShareAnEntry() async throws {
+
+        let root = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let alpha = makeCache(CodableTestValue.self, root: root, subfolder: nil)
+        let beta = makeCache(OtherCodableTestValue.self, root: root, subfolder: nil)
+
+        try await alpha.stash(CodableTestValue(count: "1"), duration: .long)
+        try await beta.stash(OtherCodableTestValue(label: "1"), duration: .long)
+
+        #expect(regularFiles(under: root).count == 2)
+        #expect(try await alpha.resource(for: "1")?.count == "1")
+        #expect(try await beta.resource(for: "1")?.label == "1")
+    }
+
+    @Test("A read by one item type does not delete another's entry")
+    func readByOneItemTypeSparesAnother() async throws {
+
+        let root = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let alpha = makeCache(CodableTestValue.self, root: root, subfolder: nil)
+        let beta = makeCache(OtherCodableTestValue.self, root: root, subfolder: nil)
+
+        try await beta.stash(OtherCodableTestValue(label: "1"), duration: .long)
+        let written = regularFiles(under: root)
+
+        #expect(try await alpha.resource(for: "1") == nil)
+        #expect(regularFiles(under: root) == written)
+        #expect(try await beta.resource(for: "1")?.label == "1")
+    }
+
+    @Test("reset() on one item type's cache leaves another's entries alone")
+    func resetSparesAnotherItemTypesEntries() async throws {
+
+        let root = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let alpha = makeCache(CodableTestValue.self, root: root, subfolder: nil)
+        let beta = makeCache(OtherCodableTestValue.self, root: root, subfolder: nil)
+
+        try await alpha.stash(CodableTestValue(count: "1"), duration: .long)
+        try await beta.stash(OtherCodableTestValue(label: "1"), duration: .long)
+
+        try await alpha.reset()
+
+        #expect(try await alpha.resource(for: "1") == nil)
+        #expect(try await beta.resource(for: "1")?.label == "1")
+    }
+
+    @Test("removeResource(for:) on one item type's cache leaves another's entry alone")
+    func removeSparesAnotherItemTypesEntry() async throws {
+
+        let root = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let alpha = makeCache(CodableTestValue.self, root: root, subfolder: nil)
+        let beta = makeCache(OtherCodableTestValue.self, root: root, subfolder: nil)
+
+        try await alpha.stash(CodableTestValue(count: "1"), duration: .long)
+        try await beta.stash(OtherCodableTestValue(label: "1"), duration: .long)
+
+        try await alpha.removeResource(for: "1")
+
+        #expect(try await beta.resource(for: "1")?.label == "1")
+    }
+}
+
+/// Exercises a cache whose own folder has become unusable, against a real file system.
+///
+/// Each test stages the fault with POSIX permissions and asserts the staging took effect before
+/// asserting anything about the cache. Without that check, a suite running as a user who ignores
+/// the permission bits would report these as passing while exercising nothing.
+@Suite("FileSystemCache file system faults")
+struct FileSystemCacheFaultTests {
+
+    /// The directory a cache writes its entries into, found without naming the layout.
+    private func entryFolder(under root: URL) throws -> URL {
+        let entry = try #require(regularFiles(under: root).first)
+        return root.appending(path: entry).deletingLastPathComponent()
+    }
+
+    /// A cache directory that is there but cannot be searched is a fault, not an absence.
+    ///
+    /// `fileExists` answers "no" for an entry inside an unsearchable directory, so the existence
+    /// check this code used to open with reported a permissions fault as an ordinary miss, for
+    /// every identifier, silently. Foundation makes the two distinguishable only in the error: an
+    /// absent file in a readable directory reports not-found, and the same absent file in an
+    /// unsearchable one reports no-permission.
+    @Test("A read in a directory that cannot be searched is a fault, not a miss")
+    func unsearchableDirectoryIsAFaultOnRead() async throws {
+
+        let root = try makeSandbox()
+        let cache = makeCache(root: root, subfolder: nil)
+        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+
+        let folder = try entryFolder(under: root)
+        let entry = folder.appending(
+            component: try #require(FileManager.default.contentsOfDirectory(atPath: folder.path).first)
+        )
+
+        defer {
+            try? setPermissions(0o755, on: folder)
+            try? FileManager.default.removeItem(at: root)
+        }
+
+        try setPermissions(0o000, on: folder)
+
+        // Positive control: without this, a process that ignores the permission bits would make
+        // the expectation below pass without the fault ever having been staged.
+        #expect(throws: (any Error).self) {
+            _ = try Data(contentsOf: entry)
+        }
+
+        await #expect(throws: (any Error).self) {
+            _ = try await cache.resource(for: "1")
+        }
+    }
+
+    /// The same state, through the other call that used to guard on an existence check.
+    @Test("A remove in a directory that cannot be searched is a fault, not a no-op")
+    func unsearchableDirectoryIsAFaultOnRemove() async throws {
+
+        let root = try makeSandbox()
+        let cache = makeCache(root: root, subfolder: nil)
+        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+
+        let folder = try entryFolder(under: root)
+
+        defer {
+            try? setPermissions(0o755, on: folder)
+            try? FileManager.default.removeItem(at: root)
+        }
+
+        try setPermissions(0o000, on: folder)
+
+        #expect(throws: (any Error).self) {
+            _ = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+        }
+
+        await #expect(throws: (any Error).self) {
+            try await cache.removeResource(for: "1")
+        }
+    }
+
+    /// Pins the error a consumer actually catches.
+    ///
+    /// Entries used to be written through `Files`' `saveResource`, which wraps every failure in
+    /// `SaveResourceError`. That type is internal to `Files`, so a consumer could neither name it
+    /// nor match on it, and the documented promise that a caller sees the file system's own error
+    /// was false for every write and every delete. Writing through the file system context keeps
+    /// that promise, and `CocoaError` is what makes it checkable: it is a type a consumer can
+    /// spell.
+    @Test("A write that fails surfaces the file system's own error")
+    func writeFailureSurfacesTheFileSystemsOwnError() async throws {
+
+        let root = try makeSandbox()
+        let cache = makeCache(root: root, subfolder: nil)
+        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+
+        let folder = try entryFolder(under: root)
+
+        defer {
+            try? setPermissions(0o755, on: folder)
+            try? FileManager.default.removeItem(at: root)
+        }
+
+        try setPermissions(0o555, on: folder)
+
+        #expect(throws: (any Error).self) {
+            try Data("x".utf8).write(to: folder.appending(component: "control.probe"))
+        }
+
+        await #expect(throws: CocoaError.self) {
+            try await cache.stash(CodableTestValue(count: "2"), duration: .long)
+        }
+    }
+}
+
 // MARK: - Fixtures
 
 private func makeSandbox() throws -> URL {
@@ -294,20 +490,54 @@ private func makeSandbox() throws -> URL {
 }
 
 private func makeCache(root: URL, subfolder: String?) -> FileSystemCache<CodableTestValue> {
-    makeCache(agent: SandboxAgent(root: root), subfolder: subfolder)
+    makeCache(CodableTestValue.self, root: root, subfolder: subfolder)
 }
 
 private func makeCache(
     agent: some FileSystemContext & Sendable,
     subfolder: String?
 ) -> FileSystemCache<CodableTestValue> {
+    makeCache(CodableTestValue.self, agent: agent, subfolder: subfolder)
+}
+
+private func makeCache<Item>(
+    _ itemType: Item.Type,
+    root: URL,
+    subfolder: String?
+) -> FileSystemCache<Item> {
+    makeCache(itemType, agent: SandboxAgent(root: root), subfolder: subfolder)
+}
+
+private func makeCache<Item>(
+    _ itemType: Item.Type,
+    agent: some FileSystemContext & Sendable,
+    subfolder: String?
+) -> FileSystemCache<Item> {
     withDependencies {
         $0.fileSystemResourceClient = FileSystemResourceClient { directory, folder in
             try FileSystemFolderStore(agent: agent, kind: directory, subfolder: folder)
         }
     } operation: {
-        FileSystemCache(.documents, subfolder: subfolder)
+        FileSystemCache<Item>(.documents, subfolder: subfolder)
     }
+}
+
+/// The lowercase hexadecimal SHA-256 of a string.
+///
+/// Spelled out here rather than read back from the package, so that a change to how the package
+/// derives a path component fails a test instead of silently agreeing with itself.
+func sha256Hex(_ string: String) -> String {
+    SHA256.hash(data: Data(string.utf8))
+        .map { String(format: "%02x", $0) }
+        .joined()
+}
+
+/// Sets POSIX permissions on a directory, for the tests that stage a file system fault.
+func setPermissions(_ permissions: Int, on url: URL) throws {
+    try FileManager.default.setAttributes(
+        [.posixPermissions: permissions],
+        ofItemAtPath: url.path
+    )
 }
 
 /// A sandbox whose reads always fail, standing in for a permissions or I/O fault on a file that
