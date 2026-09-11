@@ -15,7 +15,7 @@ import Foundation
 ///
 /// - Note: Resources that have expired are automatically removed during access.
 protocol Database: ResourceProvider {
-    
+
     /// The underlying storage provider used for storing resources.
     associatedtype Store: Storage
 
@@ -24,7 +24,7 @@ protocol Database: ResourceProvider {
 }
 
 extension Database {
-    
+
     /// Inserts a resource into the database.
     ///
     /// This operation delegates to the underlying storage's `insert` method.
@@ -43,27 +43,28 @@ extension Database {
     /// - Returns: A valid resource if found and not expired, or `nil` otherwise.
     /// - Throws: An error if the storage operation fails.
     func resource(for identifier: Store.Item.ID) throws -> Store.Resource? {
-        
+
         guard let resource = try storage.resource(for: identifier) else {
             return nil
         }
 
         if resource.isExpired {
-            try storage.remove(resource)
+            try storage.remove(for: identifier)
             return nil
         }
 
         return resource
     }
 
-    /// Removes a resource for the specified identifier, if present and not already expired.
+    /// Removes the resource held for the specified identifier, if there is one.
+    ///
+    /// The resource is not read first, so it is removed whether or not it has expired and
+    /// whether or not its stored payload can still be decoded.
     ///
     /// - Parameter identifier: The identifier of the resource to remove.
-    /// - Throws: An error if the resource exists but cannot be removed.
+    /// - Throws: An error if a resource is held and cannot be removed.
     func removeResource(for identifier: Store.Item.ID) throws {
-        if let resource = try resource(for: identifier) {
-            try storage.remove(resource)
-        }
+        try storage.remove(for: identifier)
     }
 
     /// Removes all resources from the database.

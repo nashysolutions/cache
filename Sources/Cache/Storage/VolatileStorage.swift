@@ -15,7 +15,7 @@ import Foundation
 ///
 /// - Note: This storage does **not** persist across app launches.
 final class VolatileStorage<Item: Identifiable & Sendable>: Storage {
-    
+
     /// The type of resource stored in memory.
     typealias StoredResource = Resource<Item>
 
@@ -33,12 +33,15 @@ final class VolatileStorage<Item: Identifiable & Sendable>: Storage {
         storage.update(with: resource)
     }
 
-    /// Removes the specified resource from the in-memory store.
+    /// Removes the resource held for the given identifier.
     ///
-    /// If the resource does not exist, the operation has no effect.
+    /// If no resource is held for the identifier, the operation has no effect.
     ///
-    /// - Parameter resource: The resource to remove.
-    func remove(_ resource: StoredResource) {
+    /// - Parameter identifier: The identifier of the item whose resource should be removed.
+    func remove(for identifier: Item.ID) {
+        guard let resource = storage.first(where: { $0.identifier == identifier }) else {
+            return
+        }
         storage.remove(resource)
     }
 
@@ -48,7 +51,7 @@ final class VolatileStorage<Item: Identifiable & Sendable>: Storage {
     func removeAll() {
         storage.removeAll()
     }
-    
+
     /// Retrieves a resource matching the given identifier, if present.
     ///
     /// - Parameter identifier: The identifier of the resource to retrieve.

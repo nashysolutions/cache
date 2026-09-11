@@ -52,6 +52,17 @@ enum FileSystemLayout {
     /// The extension carried by every entry file in the current layout.
     static let entryFileExtension = "cache"
 
+    /// Creates a decoder that reads the record format described above.
+    ///
+    /// Entries are written by `Files`, which encodes with a default `JSONEncoder`, so reading one
+    /// back takes a default `JSONDecoder`. The pairing is stated here, beside the description of
+    /// the format, so that whoever changes one is looking at the other.
+    ///
+    /// - Returns: A decoder for an entry's payload.
+    static func makeEntryDecoder() -> JSONDecoder {
+        JSONDecoder()
+    }
+
     /// The path, relative to the base directory, that the current layout occupies.
     ///
     /// - Parameter subfolder: The consumer-supplied subfolder, if any.

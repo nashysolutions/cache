@@ -44,6 +44,29 @@ the default `subfolder: nil` that directory was the base directory, so calling `
 cache created as `FileSystemCache<Cheese>(.documents)` removed the app's entire `Documents`
 directory.
 
+## Entries that stop decoding
+
+An entry's body is readable only while the item's `Codable` shape still matches the shape that
+wrote it. Shipping an app update that renames a property, or adds a non-optional one, makes every
+entry written by the previous version undecodable.
+
+Such an entry is treated as a miss: reading its identifier reports `nil`, and the entry is deleted
+on that read. An empty entry, which is what a truncated write leaves behind, is treated the same
+way. Nothing is reported to the caller, because there is nothing a caller can do with a payload
+that will never decode again, and leaving it in place would strand it on disk indefinitely.
+
+Deleting one of these is safe in a way that deleting an entry from an earlier layout is not,
+which is why the section below reaches the opposite conclusion about those. An entry inside
+`cache-v2` carrying a digest filename and the entry extension is provably one this package wrote,
+so an undecodable one is this package's own litter and clearing it up is not a guess about whose
+data it is. An entry from an earlier layout offers no such proof.
+
+Removal does not depend on decoding either. `removeResource(for:)` deletes by the filename the
+identifier derives, so it never reads the entry first.
+
+A failure to *read* an entry that is present, such as a permissions error, is a different matter
+and is thrown rather than reported as a miss. The entry is left where it is.
+
 ## Entries written by an earlier version
 
 Versions up to and including 6.0.0 wrote entries directly into `<base>/[<subfolder>/]`, with no
