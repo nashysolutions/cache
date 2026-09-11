@@ -61,17 +61,30 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
 
     /// Removes a specific item from the cache, if present.
     ///
+    /// The entry is deleted without being read, so an entry whose stored payload no longer
+    /// decodes is removed like any other. Removing an identifier the cache holds nothing for
+    /// does nothing and is not an error.
+    ///
     /// - Parameter identifier: The identifier of the item to remove.
-    /// - Throws: An error if the resource could not be deleted.
+    /// - Throws: An error if an entry is present and could not be deleted.
     public func removeResource(for identifier: Item.ID) async throws {
         try await database.removeResource(for: identifier)
     }
 
     /// Retrieves a cached item by its identifier, if it exists and is not expired.
     ///
+    /// An identifier the cache holds nothing for reports `nil`, not an error, so a lookup before
+    /// anything has been stashed behaves like any other miss. An entry whose stored payload no
+    /// longer decodes, which is what an item's changed `Codable` shape leaves behind after an app
+    /// update, also reports `nil`, and is deleted rather than left on disk unreadable.
+    ///
+    /// An error means the lookup could not be completed, such as a failure to read an entry that
+    /// is there. That is worth catching; a miss is not.
+    ///
     /// - Parameter identifier: The identifier of the item.
-    /// - Returns: The cached item, or `nil` if it does not exist or is expired.
-    /// - Throws: An error if the item could not be loaded or decoded.
+    /// - Returns: The cached item, or `nil` if it does not exist, is expired, or can no longer
+    ///   be decoded.
+    /// - Throws: An error if the lookup could not be completed.
     public func resource(for identifier: Item.ID) async throws -> Item? {
         try await database.resource(for: identifier)?.item
     }

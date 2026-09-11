@@ -44,6 +44,17 @@ enum FileSystemLayout {
     /// from pulling a large unrelated document into memory; anything above it is left in place.
     static let unversionedInspectionByteLimit = 4 * 1024 * 1024
 
+    /// Creates a decoder that reads the record format described above.
+    ///
+    /// Entries are written by `Files`, which encodes with a default `JSONEncoder`, so reading one
+    /// back takes a default `JSONDecoder`. The pairing is stated here, beside the description of
+    /// the format, so that whoever changes one is looking at the other.
+    ///
+    /// - Returns: A decoder for an entry's payload.
+    static func makeEntryDecoder() -> JSONDecoder {
+        JSONDecoder()
+    }
+
     /// The path, relative to the base directory, that the current layout occupies.
     ///
     /// - Parameter subfolder: The consumer-supplied subfolder, if any.

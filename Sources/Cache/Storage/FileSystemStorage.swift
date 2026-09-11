@@ -97,12 +97,28 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
         try store.saveResource(resource, filename: filename(for: resource))
     }
 
-    /// Removes a specific resource from the file system.
+    /// Removes the entry held for the given identifier, if there is one.
     ///
-    /// - Parameter resource: The resource to remove.
-    /// - Throws: An error if the resource could not be deleted.
-    func remove(_ resource: Resource) throws {
-        try store.deleteResource(filename: filename(for: resource))
+    /// The entry is deleted by the filename its identifier derives, so it is never read first.
+    /// An entry whose payload no longer decodes is therefore removed exactly like any other,
+    /// rather than being stuck on disk because reading it is what fails.
+    ///
+    /// The existence check is what keeps an absent entry separate from a present one that cannot
+    /// be deleted: `deleteResource(filename:)` reports both as the same error.
+    ///
+    /// - Parameter identifier: The identifier of the item whose entry should be removed.
+    /// - Throws: An error if an entry is present and could not be deleted. An identifier with no
+    ///   entry on disk is not an error.
+    func remove(for identifier: Item.ID) throws {
+
+        let store = try store
+        let name = filename(for: identifier)
+
+        guard store.folder.resource(filename: name).exists(using: store.agent) else {
+            return
+        }
+
+        try store.deleteResource(filename: name)
     }
 
     /// Removes every entry this storage wrote.
@@ -174,13 +190,52 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
         }
     }
 
-    /// Retrieves a resource by its identifier, if one exists on disk.
+    /// Retrieves the entry held for the given identifier, if one can be served.
+    ///
+    /// Three outcomes are kept apart, because a caller needs them apart:
+    ///
+    /// - **No entry on disk.** Reports `nil`. This is the ordinary state of every identifier a
+    ///   consumer has not stashed, including all of them before the first stash on a fresh
+    ///   install, so it is not a failure and must not be reported as one.
+    /// - **An entry that does not decode.** Reports `nil`, and deletes the entry. A stored
+    ///   payload stops decoding when the item's `Codable` shape changes, which an app update
+    ///   routinely does. Such an entry can never be served again, so there is nothing to protect
+    ///   by keeping it, and leaving it would strand it on the consumer's disk for good. An entry
+    ///   that is empty, which is what a truncated write leaves behind, fails to decode and is
+    ///   treated the same way.
+    /// - **A failure to read an entry that is present.** Throws. A permissions or I/O fault is a
+    ///   real fault, and reporting it as an ordinary cache miss would hide it.
+    ///
+    /// The bytes are read and decoded here rather than through `loadResource(filename:)`,
+    /// because that call reports all three outcomes as one error type that is internal to
+    /// `Files`, so the distinction cannot be drawn from outside that package. Reading directly
+    /// also means the error a caller sees for a genuine fault is the file system's own, which a
+    /// caller can match on, rather than one it has no way to name.
     ///
     /// - Parameter identifier: The identifier of the item.
-    /// - Returns: A `CodableResource` if one is found, or `nil` if not.
-    /// - Throws: An error if the resource could not be read or decoded.
+    /// - Returns: The stored resource, or `nil` if there is none to serve.
+    /// - Throws: An error if an entry is present but could not be read, or if an entry that does
+    ///   not decode could not be deleted.
     func resource(for identifier: Item.ID) throws -> StoredResource? {
-        try store.loadResource(filename: filename(for: identifier))
+
+        let store = try store
+        let name = filename(for: identifier)
+        let entry = store.folder.resource(filename: name)
+
+        guard entry.exists(using: store.agent) else {
+            return nil
+        }
+
+        let data = try entry.read(using: store.agent)
+
+        guard let resource = try? FileSystemLayout
+            .makeEntryDecoder()
+            .decode(StoredResource.self, from: data) else {
+            try store.deleteResource(filename: name)
+            return nil
+        }
+
+        return resource
     }
 
     /// Constructs a filename from the given resource.
