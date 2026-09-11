@@ -51,17 +51,19 @@ versioned folder and no extension. 6.0.0 additionally changed the filename from 
 description to a SHA-256 digest, which left every entry written by 5.x unreachable: never read,
 never expired, never removed.
 
-On its first use, a cache now sweeps those entries away. Because their filenames are
-indistinguishable from a file you put there yourself, the sweep identifies a candidate by reading
-it: a file is deleted only when its contents decode as a JSON object whose keys are exactly `item`
-and `expiry`, with `expiry` decodable as a date. Anything that fails that check is left alone, as
-is any file too large to inspect.
+**Those entries are left on disk, and this package will not remove them.** They are unreachable
+from the cache itself, so they occupy that disk until something else clears it up. Deleting them
+is your call, not this package's.
 
-Two consequences are worth knowing:
+That is deliberate. Removing them automatically would need a way to tell one of them apart from a
+file you put there yourself, and there is none. Their filenames are whatever the identifier's
+description happened to be, so a filename check is a guess. Their contents are a JSON object with
+exactly the keys `item` and `expiry` and a numeric `expiry`, which is also the shape of any other
+TTL wrapper's record, and of a perfectly ordinary `{"item":"milk","expiry":3}` of your own. A
+sweep matching on that shape deletes your data, and it cannot even limit the damage to upgrades:
+nothing on disk records whether an earlier version was ever installed, so a first-time adopter's
+directory is scanned and matched on the very first use.
 
-- **The cache starts cold after upgrading.** Entries written by 6.0.0 and earlier are discarded
-  rather than migrated. A cold cache is a legitimate state for a cache; leaking that disk forever
-  is not.
-- **The sweep reads the directory you nominated.** The narrower that directory, the less work it
-  is. A cache configured with a subfolder inspects only the subfolder; a cache configured with
-  `subfolder: nil` inspects everything sitting directly in the base directory.
+To clear the old entries yourself, delete them by hand. With `subfolder: nil` they sit directly in
+the base directory alongside the `cache-v2` folder; with a subfolder, directly inside it. A cache
+configured with a subfolder is the easier one to tidy, which is a reason to prefer one.

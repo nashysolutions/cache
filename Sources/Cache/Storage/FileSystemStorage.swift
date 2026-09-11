@@ -41,12 +41,6 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
     /// If specified, all resources will be scoped to this subfolder.
     private let subfolder: String?
 
-    /// Whether this instance has already looked for entries left behind by an earlier layout.
-    ///
-    /// The sweep is idempotent, so running it once per instance is enough; the flag only keeps
-    /// it off the path of every subsequent operation.
-    private var hasSweptUnversionedLayout = false
-
     /// Creates a new file system-backed storage instance with a filename strategy.
     ///
     /// - Parameters:
@@ -68,19 +62,13 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
     /// - Throws: An error if the store could not be created.
     private var store: any FileSystemOperations {
         get throws {
-            // The unversioned store is made first for two reasons. It is the directory the sweep
-            // runs in, and creating it as a separate step means each level of the path is created
-            // one at a time, so an agent whose `createDirectory` does not create intermediate
-            // directories continues to work.
-            let unversionedStore = try fileSystemResourceClient.makeStore(
+            // The enclosing folder is made as a separate step so that each level of the path is
+            // created one at a time. An agent whose `createDirectory` does not create intermediate
+            // directories would otherwise fail to create the versioned folder below it.
+            _ = try fileSystemResourceClient.makeStore(
                 fileSystemDirectory,
                 subfolder
             )
-
-            if hasSweptUnversionedLayout == false {
-                hasSweptUnversionedLayout = true
-                sweepUnversionedLayout(in: unversionedStore)
-            }
 
             return try fileSystemResourceClient.makeStore(
                 fileSystemDirectory,
@@ -115,62 +103,6 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
         try store.deleteFiles { entry in
             entry.value(\.isRegularFile) == true
             && FileSystemLayout.isEntryFilename(entry.url.lastPathComponent)
-        }
-    }
-
-    /// Deletes entries left behind by a layout that predates ``FileSystemLayout/versionFolderName``.
-    ///
-    /// Those entries are unreachable: a lookup computes a different path, so they are never read,
-    /// never expired and never removed, and they occupy the consumer's disk indefinitely. They sit
-    /// directly in the directory the consumer nominated, which this package does not own, so a
-    /// candidate is deleted only once its contents have been confirmed to be a cache record. A
-    /// file that cannot be read, or that is too large to inspect, is left where it is.
-    ///
-    /// Failures are deliberately swallowed. This is housekeeping, and a directory that cannot be
-    /// enumerated is a reason to skip the cleanup, not a reason for the cache itself to stop
-    /// working.
-    ///
-    /// - Parameter store: A store scoped to the directory the earlier layout wrote into.
-    private func sweepUnversionedLayout(in store: any FileSystemOperations) {
-
-        guard let entries = try? store.contents(
-            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
-            options: []
-        ) else {
-            return
-        }
-
-        let decoder = JSONDecoder()
-        var unversioned: Set<URL> = []
-
-        for entry in entries {
-
-            guard entry.value(\.isRegularFile) == true else {
-                continue
-            }
-
-            guard let size = entry.value(\.fileSize),
-                  size <= FileSystemLayout.unversionedInspectionByteLimit else {
-                continue
-            }
-
-            guard let data = try? store.loadData(named: entry.url.lastPathComponent) else {
-                continue
-            }
-
-            let record = try? decoder.decode(FileSystemLayout.UnversionedRecord.self, from: data)
-
-            if record != nil {
-                unversioned.insert(entry.url)
-            }
-        }
-
-        guard unversioned.isEmpty == false else {
-            return
-        }
-
-        _ = try? store.deleteFiles { entry in
-            unversioned.contains(entry.url)
         }
     }
 
