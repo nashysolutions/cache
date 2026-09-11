@@ -4,12 +4,14 @@ This article explains how to get started quickly.
 
 ## Overview
 
-Your model must conform to `Identifiable`. You have the option of a ``VolatileCache`` or a ``FileSystemCache``.  If you choose, ``FileSystemCache``, then your model must also conform to `Codable`.
+Your model must conform to `Identifiable` and `Sendable`, and its `id` must conform to
+`LosslessStringConvertible`. You have the option of a ``VolatileCache`` or a ``FileSystemCache``.
+If you choose ``FileSystemCache``, then your model must also conform to `Codable`.
 
 ```swift
 import Cache
 
-struct Cheese: Identifiable, Sendable {
+struct Cheese: Identifiable, Codable, Sendable {
     let id: Int
     let name: String
 }
@@ -17,180 +19,93 @@ struct Cheese: Identifiable, Sendable {
 
 ### VolatileCache
 
-### Step 1
-
-Instantiate your cache.
+Instantiate your cache and use it.
 
 ```swift
-final class ContentViewModel: ObservableObject {
-    
-    private let cache = VolatileCache<Cheese>()
-    
-    func save(cheese: Cheese) async throws(ContentViewModelError) {
-        do {
-            try await cache.stash(cheese, duration: .long)
-        } catch {
-            throw ContentViewModelError.cachingFailed
-        }
-    }
-}
+let cache = VolatileCache<Cheese>()
+
+try await cache.stash(Cheese(id: 1, name: "Brie"), duration: .long)
+
+let brie = try await cache.resource(for: 1)
 ```
 
-### Step 2
-
-There is no step 2!
+There is no step 2.
 
 ### FileSystemCache
 
-### Step 1
-
-Instantiate your cache.
+Instantiate your cache and use it.
 
 ```swift
-final class ContentViewModel: ObservableObject {
-    
-    private let cache = FileSystemCache<Cheese>(.caches, subfolder: "Cheeses")
-    
-    func save(cheese: Cheese) async throws(ContentViewModelError) {
-        do {
-            try await cache.stash(cheese, duration: .long)
-        } catch {
-            throw ContentViewModelError.cachingFailed
-        }
-    }
-}
+let cache = FileSystemCache<Cheese>(.caches, subfolder: "Cheeses")
+
+try await cache.stash(Cheese(id: 1, name: "Brie"), duration: .long)
+
+let brie = try await cache.resource(for: 1)
 ```
 
-### Step 2
+There is no step 2 here either. Entries are written to the real file system with no further
+setup, into a versioned folder below the directory you nominate. See <doc:OnDiskFormat> for the
+layout, and for what this package will and will not delete.
 
-There is no step 2!...unless, you haven't already been using the awesome [Files](https://github.com/nashysolutions/files) library and setup a `FileSystemContext` for your environment. If not, no problem, just copy and paste the following boilerplate.
+A lookup for an identifier you have not stashed reports `nil` rather than throwing, and so does an
+entry whose stored payload no longer decodes. An error means the operation could not be completed:
+a cache directory that cannot be created, or an entry that is there but cannot be read.
+
+## Supplying your own file system
+
+Everything above uses `FileManager`. If you need something else, a stub for a test or a file
+system of your own, supply a `FileSystemResourceClient` and construct the cache inside that scope.
 
 ```swift
-import Foundation
+import Cache
+import Dependencies
 import Files
+import FoundationDependencies
 
-/// A wrapper for the `FileManager` from Foundation. This will interface with our environment.
-struct FileSystemLiveAgent: FileSystemContext {
-        
-    let fileManager: FileManager
-    
-    func fileExists(at url: URL) -> Bool {
-        var isDir: ObjCBool = false
-        return fileManager.fileExists(atPath: url.path, isDirectory: &isDir) && !isDir.boolValue
+let cache = withDependencies {
+    $0.fileSystemResourceClient = FileSystemResourceClient { directory, subfolder in
+        try FileSystemFolderStore(agent: myAgent, kind: directory, subfolder: subfolder)
     }
-    
-    func folderExists(at url: URL) -> Bool {
-        var isDir: ObjCBool = false
-        return fileManager.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue
-    }
-    
-    func moveResource(from fromURL: URL, to toURL: URL) throws {
-        try fileManager.moveItem(at: fromURL, to: toURL)
-    }
-    
-    func copyResource(from fromURL: URL, to toURL: URL) throws {
-        try fileManager.copyItem(at: fromURL, to: toURL)
-    }
-    
-    func deleteLocation(at url: URL) throws {
-        if fileManager.fileExists(atPath: url.path) {
-            try fileManager.removeItem(at: url)
-        }
-    }
-    
-    func createDirectory(at url: URL) throws {
-        try fileManager.createDirectory(at: url, withIntermediateDirectories: true, attributes: nil)
-    }
-    
-    func removeDirectory(at url: URL) throws {
-        // Only remove if it is a directory
-        if folderExists(at: url) {
-            try fileManager.removeItem(at: url)
-        }
-    }
-    
-    func write(_ data: Data, to url: URL, options: NSData.WritingOptions) throws {
-        try data.write(to: url, options: options)
-    }
-    
-    func read(from url: URL) throws -> Data {
-        try Data(contentsOf: url)
-    }
-    
-    func url(for directory: Files.FileSystemDirectory) throws -> URL {
-        switch directory {
-        case .documents:
-            return try fileManager.url(for: .documentDirectory,
-                                       in: .userDomainMask,
-                                       appropriateFor: nil,
-                                       create: true)
-        case .caches:
-            return try fileManager.url(for: .cachesDirectory,
-                                       in: .userDomainMask,
-                                       appropriateFor: nil,
-                                       create: true)
-        case .temporary:
-            return fileManager.temporaryDirectory
-        case .applicationSupport:
-            return try fileManager.url(for: .applicationSupportDirectory,
-                                       in: .userDomainMask,
-                                       appropriateFor: nil,
-                                       create: true)
-        }
-    }
-}
-
-extension FileSystemClientKey: @retroactive DependencyKey {
-
-    public static var liveValue = FileSystemClient(
-        fileExists: { url in
-            let agent = FileSystemLiveAgent(fileManager: .default)
-            return agent.fileExists(at: url)
-        },
-        folderExists: { url in
-            let agent = FileSystemLiveAgent(fileManager: .default)
-            return agent.folderExists(at: url)
-        },
-        createDirectory: { url in
-            let agent = FileSystemLiveAgent(fileManager: .default)
-            try agent.createDirectoryIfNecessary(at: url)
-        },
-        deleteLocation: { url in
-            let agent = FileSystemLiveAgent(fileManager: .default)
-            try agent.deleteLocation(at: url)
-        },
-        moveResource: { fromURL, toURL in
-            let agent = FileSystemLiveAgent(fileManager: .default)
-            try agent.moveResource(from: fromURL, to: toURL)
-        },
-        copyResource: { fromURL, toURL in
-            let agent = FileSystemLiveAgent(fileManager: .default)
-            try agent.copyResource(from: fromURL, to: toURL)
-        },
-        write: { data, url, options in
-            let agent = FileSystemLiveAgent(fileManager: .default)
-            try agent.write(data, to: url, options: options)
-        },
-        read: { url in
-            let agent = FileSystemLiveAgent(fileManager: .default)
-            return try agent.read(from: url)
-        },
-        urlForDirectory: { directory in
-            let agent = FileSystemLiveAgent(fileManager: .default)
-            return try agent.url(for: directory)
-        }
-    )
-}
-
-extension FileSystemResourceClientKey: @retroactive DependencyKey {
-    
-    public static var liveValue: FileSystemResourceClient {
-        return FileSystemResourceClient(makeStore: { directory, subfolder in
-            let agent = FileSystemLiveAgent(fileManager: .default)
-            return try FileSystemFolderStore(agent: agent, kind: directory, subfolder: subfolder)
-        })
-    }
+} operation: {
+    FileSystemCache<Cheese>(.caches, subfolder: "Cheeses")
 }
 ```
 
-To learn more about `liveValue` see the readme for [Pointfree's](https://www.pointfree.co) library named [Dependencies](https://github.com/pointfreeco/swift-dependencies).
+`myAgent` is any `FileSystemContext` from the [Files](https://github.com/nashysolutions/files)
+library. The cache resolves its client when it is constructed, so it must be constructed inside
+the `operation` closure, not merely used there.
+
+## In a test
+
+`swift-dependencies` resolves a dependency's *test* value inside a test, whether or not a live
+value exists, and the test value for `fileSystemResourceClient` is a mock that accepts writes and
+keeps nothing. A test that exercises a ``FileSystemCache`` without saying otherwise will therefore
+see every lookup report `nil`, no matter what it stashed first.
+
+Two ways out, depending on what you are testing:
+
+- Supply your own client, as above. This is the right choice for a unit test, which should not be
+  touching a real disk.
+- Opt into the live context, which is the right choice for an integration test that means to
+  exercise the real file system. Point it at a directory you are willing to have written to.
+
+```swift
+let cache = withDependencies {
+    $0.context = .live
+} operation: {
+    FileSystemCache<Cheese>(.temporary, subfolder: "CheeseTests")
+}
+```
+
+## Upgrading
+
+Earlier versions of this article asked you to write a `FileSystemContext` and two `@retroactive
+DependencyKey` conformances by hand. That is no longer needed, and the conformance for
+`FileSystemResourceClientKey` is now declared by this package, so a copy of it in your own code is
+a duplicate and will not compile. Delete yours.
+
+If you also wrote the `FileSystemClientKey` conformance, this package never read it. Keep it only
+if something else in your app does.
+
+To learn more about `liveValue` see the readme for [Pointfree's](https://www.pointfree.co) library
+named [Dependencies](https://github.com/pointfreeco/swift-dependencies).

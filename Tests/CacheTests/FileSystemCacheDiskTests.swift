@@ -375,7 +375,10 @@ private func undecodableRecordData() -> Data {
 
 /// Every regular file beneath `root`, as paths relative to it. Directories are excluded, so an
 /// empty folder the cache created is invisible here.
-private func regularFiles(under root: URL) -> Set<String> {
+///
+/// Shared with `QuickStartTests`, which asks the same question of a real app directory rather
+/// than of a sandbox.
+func regularFiles(under root: URL) -> Set<String> {
     guard let enumerator = FileManager.default.enumerator(
         at: root,
         includingPropertiesForKeys: [.isRegularFileKey]
