@@ -116,4 +116,22 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
     public func reset() async throws {
         try await database.removeAll()
     }
+
+    /// Removes every expired entry this cache wrote, and reports how many were removed.
+    ///
+    /// Only entries inside this cache's own type folder are considered, so the sweep cannot reach
+    /// another item type's entries, a file you placed there yourself, or anything written by an
+    /// earlier layout. An entry is judged by the expiry it carries, not by whether its item still
+    /// decodes, so an expired entry written by an earlier version of your `Codable` type is
+    /// removed like any other. <doc:OnDiskFormat> says exactly what is and is not removed, and
+    /// why.
+    ///
+    /// - Returns: The number of entries removed.
+    /// - Throws: An error if the cache folder could not be created or listed, an entry could not
+    ///   be read, or an expired entry could not be deleted. Entries removed before the fault stay
+    ///   removed; the sweep is not transactional.
+    @discardableResult
+    public func removeExpired() async throws -> Int {
+        try await database.removeExpired()
+    }
 }

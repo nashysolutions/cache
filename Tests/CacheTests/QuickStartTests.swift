@@ -181,4 +181,53 @@ struct QuickStartTests {
         #expect(try await cache.resource(for: 1) == nil)
         #expect(FileManager.default.fileExists(atPath: root.path) == false)
     }
+
+    /// The `removeExpired()` snippet, run, with the article's claim that nothing calls it for you.
+    ///
+    /// A write and a read of another identifier happen between stashing an expired item and the
+    /// sweep. If either had swept on the consumer's behalf, the count would be zero.
+    @Test("The removeExpired() snippet sweeps only when called: a write and a read before it remove nothing")
+    func removeExpiredSnippetSweepsOnlyWhenCalled() async throws {
+
+        let cache = VolatileCache<Cheese>()
+
+        try await cache.stash(Cheese(id: 1, name: "Brie"), duration: .custom(Date().addingTimeInterval(-60)))
+        try await cache.stash(Cheese(id: 2, name: "Cheddar"), duration: .long)
+        _ = try await cache.resource(for: 2)
+
+        let removed = try await cache.removeExpired()
+
+        #expect(removed == 1)
+        #expect(try await cache.resource(for: 2)?.name == "Cheddar")
+
+        // "The result can be ignored." This compiles without an assignment, which is the claim.
+        try await cache.removeExpired()
+    }
+
+    /// The same snippet against the file-backed cache the article promises it for as well, in the
+    /// live context, so that what is swept is a file on disk.
+    @Test("The removeExpired() snippet removes an expired entry from disk")
+    func removeExpiredSnippetRemovesAnEntryFromDisk() async throws {
+
+        let subfolder = "cache-quickstart-tests-\(UUID().uuidString)"
+        let root = FileManager.default.temporaryDirectory
+            .appending(component: subfolder, directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let cache = withDependencies {
+            $0.context = .live
+        } operation: {
+            FileSystemCache<Cheese>(.temporary, subfolder: subfolder)
+        }
+
+        try await cache.stash(Cheese(id: 1, name: "Brie"), duration: .custom(Date().addingTimeInterval(-60)))
+        try await cache.stash(Cheese(id: 2, name: "Cheddar"), duration: .long)
+        #expect(regularFiles(under: root).count == 2)
+
+        let removed = try await cache.removeExpired()
+
+        #expect(removed == 1)
+        #expect(regularFiles(under: root).count == 1)
+        #expect(try await cache.resource(for: 2)?.name == "Cheddar")
+    }
 }

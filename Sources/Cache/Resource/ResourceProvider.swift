@@ -46,4 +46,10 @@ protocol ResourceProvider: Actor {
     ///
     /// - Throws: An error if the operation fails or the store cannot be cleared.
     func removeAll() throws
+
+    /// Removes every resource that has expired.
+    ///
+    /// - Returns: The number of resources removed.
+    /// - Throws: An error if the operation fails.
+    func removeExpired() throws -> Int
 }

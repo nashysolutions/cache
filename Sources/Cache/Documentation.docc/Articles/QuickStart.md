@@ -63,6 +63,20 @@ other's entries.
 > Important: on a non-sandboxed macOS process, `.documents` is the user's real `~/Documents`, and
 > a cache nominating it creates a folder there on first use.
 
+## Clearing expired entries
+
+An expired entry is removed when its identifier is next looked up. One that is never looked up
+again stays where it is, which for a file-backed cache means it stays on disk. When you want them
+gone, say so:
+
+```swift
+let removed = try await cache.removeExpired()
+```
+
+Every expired entry is removed and the count comes back. Nothing calls this for you: not a timer,
+not a read, not a write. Launch, sign-out and a low-storage warning are the usual moments. Both
+caches support it, and the result can be ignored.
+
 ## Supplying your own file system
 
 Everything above uses `FileManager`. If you need something else, a stub for a test or a file

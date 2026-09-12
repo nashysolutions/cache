@@ -39,6 +39,7 @@ You either get it — or you don’t.
   - `VolatileCache` — fast, in-memory
   - `FileSystemCache` — persistent, file-backed
 - First-class expiry with injected time
+- Bulk removal of expired entries, only when you ask: `removeExpired()`
 - Native `async/await`
 - Designed to compose cleanly with dependency injection
 

@@ -73,4 +73,17 @@ extension Database {
     func removeAll() throws {
         try storage.removeAll()
     }
+
+    /// Removes every resource that has expired, and reports how many were removed.
+    ///
+    /// The instant every resource is judged against is taken here, once, and handed to storage,
+    /// so a sweep over many resources reads the clock once rather than once per resource. This is
+    /// also the only place a sweep resolves the current time, which is where an injected clock
+    /// would go.
+    ///
+    /// - Returns: The number of resources removed.
+    /// - Throws: An error if the storage could not be enumerated or a resource could not be removed.
+    func removeExpired() throws -> Int {
+        try storage.removeExpired(asOf: Date())
+    }
 }

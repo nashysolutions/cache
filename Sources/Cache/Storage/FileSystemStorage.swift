@@ -140,10 +140,80 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
     ///
     /// - Throws: An error if the folder could not be enumerated, or an entry could not be deleted.
     func removeAll() throws {
-        try store.deleteFiles { entry in
-            entry.value(\.isRegularFile) == true
-            && FileSystemLayout.isEntryFilename(entry.url.lastPathComponent)
+        try store.deleteFiles(matching: Self.isEntry)
+    }
+
+    /// Removes every entry this storage wrote whose expiry precedes the given instant.
+    ///
+    /// The sweep lists this item type's own folder and judges each entry by the `expiry` it
+    /// carries, decoding that field alone through ``FileSystemLayout/EntryExpiry``, which is
+    /// where the reason for not decoding the item lives.
+    ///
+    /// Files this sweep leaves alone:
+    ///
+    /// - An entry that has not expired, whether or not its item still decodes.
+    /// - An entry whose `expiry` cannot be read: an empty file left by a truncated write, or bytes
+    ///   that are not an entry at all. Nothing says such an entry has expired, so this sweep does
+    ///   not remove it and does not count it. The next lookup of its identifier clears it, as
+    ///   ``resource(for:)`` describes.
+    /// - Anything that is not an entry of the current layout, by the same test ``removeAll()``
+    ///   applies.
+    ///
+    /// An entry that disappears between being listed and being read or deleted, which another
+    /// cache over the same folder can cause, is treated as already gone and not counted. Any
+    /// other failure to read or delete is a fault and surfaces, on the rule given at
+    /// ``reportsNothingThere(_:)``. Entries removed before the fault stay removed; the sweep is
+    /// not transactional.
+    ///
+    /// - Parameter now: The instant to judge expiry against.
+    /// - Returns: The number of entries removed.
+    /// - Throws: An error if the folder could not be created or listed, an entry could not be
+    ///   read, or an expired entry could not be deleted.
+    func removeExpired(asOf now: Date) throws -> Int {
+
+        let store = try store
+        let decoder = FileSystemLayout.makeEntryDecoder()
+        var removed = 0
+
+        let entries = try store.contents(includingPropertiesForKeys: [.isRegularFileKey], options: [])
+
+        for entry in entries where Self.isEntry(entry) {
+
+            let data: Data
+
+            do {
+                data = try store.agent.read(from: entry.url)
+            } catch let error where reportsNothingThere(error) {
+                continue
+            }
+
+            // The comparison is the one `ExpiringResource.isExpired(asOf:)` makes. It cannot be
+            // called here because an expiry on its own is not a resource: there is no item to
+            // wrap, and requiring one would reintroduce the dependence on decoding it.
+            guard let expiry = try? decoder.decode(FileSystemLayout.EntryExpiry.self, from: data).expiry,
+                  expiry < now else {
+                continue
+            }
+
+            do {
+                try store.agent.deleteLocation(at: entry.url)
+            } catch let error where reportsNothingThere(error) {
+                continue
+            }
+
+            removed += 1
         }
+
+        return removed
+    }
+
+    /// Whether a listed file is an entry this storage wrote in the current layout.
+    ///
+    /// Shared by ``removeAll()`` and ``removeExpired(asOf:)``, so the two sweeps cannot disagree
+    /// about what counts as an entry.
+    private static func isEntry(_ entry: DirectoryEntry) -> Bool {
+        entry.value(\.isRegularFile) == true
+        && FileSystemLayout.isEntryFilename(entry.url.lastPathComponent)
     }
 
     /// Retrieves the entry held for the given identifier, if one can be served.

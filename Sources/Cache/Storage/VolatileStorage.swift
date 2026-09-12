@@ -62,4 +62,14 @@ final class VolatileStorage<Item: Identifiable & Sendable>: Storage {
         let predicate: (StoredResource) -> Bool = { $0.identifier == identifier }
         return storage.first(where: predicate)
     }
+
+    /// Removes every resource whose expiry precedes the given instant.
+    ///
+    /// - Parameter now: The instant to judge expiry against.
+    /// - Returns: The number of resources removed.
+    func removeExpired(asOf now: Date) -> Int {
+        let expired = storage.filter { $0.isExpired(asOf: now) }
+        storage.subtract(expired)
+        return expired.count
+    }
 }

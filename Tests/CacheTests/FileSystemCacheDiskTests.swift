@@ -479,6 +479,274 @@ struct FileSystemCacheFaultTests {
     }
 }
 
+/// Exercises ``FileSystemCache/removeExpired()`` against a real file system.
+///
+/// The observables are the count the sweep reports and which files survive it. Reading an expired
+/// identifier back proves nothing here, because a read reports `nil` for an expired entry whether
+/// or not the sweep removed it, so these tests count files rather than read them back.
+@Suite("FileSystemCache expired-entry sweep")
+struct FileSystemCacheSweepTests {
+
+    @Test("Expired entries are deleted, live entries are kept, and the count says how many went")
+    func sweepDeletesOnlyExpiredEntries() async throws {
+
+        let root = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let cache = makeCache(root: root, subfolder: nil)
+        try await cache.stash(CodableTestValue(count: "expired-a"), duration: expiredAnHourAgo())
+        try await cache.stash(CodableTestValue(count: "expired-b"), duration: expiredAnHourAgo())
+        try await cache.stash(CodableTestValue(count: "live"), duration: .long)
+        #expect(regularFiles(under: root).count == 3)
+
+        let removed = try await cache.removeExpired()
+
+        #expect(removed == 2)
+        #expect(regularFiles(under: root).count == 1)
+        #expect(try await cache.resource(for: "live")?.count == "live")
+    }
+
+    @Test("A second sweep finds nothing, because the first removed the entries rather than only counting them")
+    func secondSweepFindsNothing() async throws {
+
+        let root = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let cache = makeCache(root: root, subfolder: nil)
+        try await cache.stash(CodableTestValue(count: "expired"), duration: expiredAnHourAgo())
+
+        #expect(try await cache.removeExpired() == 1)
+        #expect(try await cache.removeExpired() == 0)
+    }
+
+    @Test("A sweep with nothing expired reports zero and deletes nothing")
+    func sweepWithNothingExpiredReportsZero() async throws {
+
+        let root = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let cache = makeCache(root: root, subfolder: nil)
+        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+        try await cache.stash(CodableTestValue(count: "2"), duration: .long)
+        let written = regularFiles(under: root)
+
+        #expect(try await cache.removeExpired() == 0)
+        #expect(regularFiles(under: root) == written)
+    }
+
+    @Test("A sweep of a cache that has never written reports zero rather than throwing")
+    func sweepOfUnusedCacheReportsZero() async throws {
+
+        let root = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let cache = makeCache(root: root, subfolder: nil)
+
+        #expect(try await cache.removeExpired() == 0)
+    }
+
+    /// The sweep decides by the `expiry` the file carries, not by whether the item decodes.
+    ///
+    /// This is the entry an app update leaves behind, and the one a sweep that decoded the whole
+    /// entry to decide would skip. `FileSystemLayout.EntryExpiry` carries the reasoning.
+    @Test("An expired entry whose item no longer decodes is removed and counted")
+    func sweepRemovesExpiredEntryWhoseItemNoLongerDecodes() async throws {
+
+        let root = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let cache = makeCache(root: root, subfolder: nil)
+        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+
+        let entry = root.appending(path: try #require(regularFiles(under: root).first))
+        try undecodableRecordData(expiry: Date().addingTimeInterval(-3600)).write(to: entry)
+
+        #expect(try await cache.removeExpired() == 1)
+        #expect(FileManager.default.fileExists(atPath: entry.path) == false)
+    }
+
+    @Test("An unexpired entry whose item no longer decodes is left for the read path")
+    func sweepSparesUnexpiredEntryWhoseItemNoLongerDecodes() async throws {
+
+        let root = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let cache = makeCache(root: root, subfolder: nil)
+        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+
+        let entry = root.appending(path: try #require(regularFiles(under: root).first))
+        try undecodableRecordData(expiry: Date().addingTimeInterval(3600)).write(to: entry)
+
+        #expect(try await cache.removeExpired() == 0)
+        #expect(FileManager.default.fileExists(atPath: entry.path))
+    }
+
+    /// Nothing about an empty file says it has expired, so the sweep leaves it. The read path
+    /// already treats it as unservable and clears it when its identifier is next looked up.
+    @Test("An entry whose expiry cannot be read is left in place and not counted")
+    func sweepSparesEntryWhoseExpiryCannotBeRead() async throws {
+
+        let root = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let cache = makeCache(root: root, subfolder: nil)
+        try await cache.stash(CodableTestValue(count: "1"), duration: expiredAnHourAgo())
+
+        let entry = root.appending(path: try #require(regularFiles(under: root).first))
+        try Data().write(to: entry)
+
+        #expect(try await cache.removeExpired() == 0)
+        #expect(FileManager.default.fileExists(atPath: entry.path))
+    }
+
+    /// The same measurement `reset()` is held to: a file the cache did not write survives, even
+    /// sitting beside the cache's own entries and even carrying an expiry that has passed.
+    @Test("A foreign file beside the entries survives the sweep, even one shaped like an expired entry")
+    func sweepSparesForeignFileBesideItsOwnEntries() async throws {
+
+        let root = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let cache = makeCache(root: root, subfolder: nil)
+        try await cache.stash(CodableTestValue(count: "expired"), duration: expiredAnHourAgo())
+
+        let entry = try #require(regularFiles(under: root).first)
+        let writeDirectory = root.appending(path: entry).deletingLastPathComponent()
+
+        let neighbour = writeDirectory.appending(component: "unrelated-neighbour.json")
+        let neighbourBody = undecodableRecordData(expiry: Date().addingTimeInterval(-3600))
+        try neighbourBody.write(to: neighbour)
+
+        #expect(try await cache.removeExpired() == 1)
+        #expect((try? Data(contentsOf: neighbour)) == neighbourBody)
+        #expect(regularFiles(under: root).count == 1)
+    }
+
+    @Test("A sweep by one item type's cache leaves another item type's expired entries alone")
+    func sweepSparesAnotherItemTypesEntries() async throws {
+
+        let root = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let alpha = makeCache(CodableTestValue.self, root: root, subfolder: nil)
+        let beta = makeCache(OtherCodableTestValue.self, root: root, subfolder: nil)
+
+        try await alpha.stash(CodableTestValue(count: "1"), duration: expiredAnHourAgo())
+        try await beta.stash(OtherCodableTestValue(label: "1"), duration: expiredAnHourAgo())
+
+        #expect(try await alpha.removeExpired() == 1)
+        #expect(regularFiles(under: root).count == 1)
+        #expect(try await beta.removeExpired() == 1)
+        #expect(regularFiles(under: root).isEmpty)
+    }
+
+    /// The rule the read and remove paths already follow: a folder that is there but cannot be
+    /// searched is a fault, and a sweep that reported it as "nothing expired" would hide it.
+    @Test("A sweep of a folder that cannot be searched is a fault, not zero")
+    func unsearchableFolderIsAFaultOnSweep() async throws {
+
+        let root = try makeSandbox()
+        let cache = makeCache(root: root, subfolder: nil)
+        try await cache.stash(CodableTestValue(count: "1"), duration: expiredAnHourAgo())
+
+        let entry = try #require(regularFiles(under: root).first)
+        let folder = root.appending(path: entry).deletingLastPathComponent()
+
+        defer {
+            try? setPermissions(0o755, on: folder)
+            try? FileManager.default.removeItem(at: root)
+        }
+
+        try setPermissions(0o000, on: folder)
+
+        // Positive control, as in the fault suite above: a process that ignores the permission
+        // bits would otherwise pass the expectation below without the fault ever being staged.
+        #expect(throws: (any Error).self) {
+            _ = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+        }
+
+        await #expect(throws: (any Error).self) {
+            _ = try await cache.removeExpired()
+        }
+    }
+
+    /// An entry can vanish between the sweep listing it and reading it: another cache over the
+    /// same folder, or the system purging the caches directory. That is an absence, not a fault,
+    /// and the sweep carries on past it.
+    @Test("An entry that vanishes before it is read is skipped, not counted, and does not stop the sweep")
+    func entryVanishingBeforeReadIsSkipped() async throws {
+
+        let root = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let names = try await seedTwoExpiredEntries(under: root)
+        let cache = makeCache(agent: SweepFaultAgent(root: root, vanishedOnRead: [names[0]]), subfolder: nil)
+
+        #expect(try await cache.removeExpired() == 1)
+        #expect(regularFiles(under: root).count == 1)
+    }
+
+    @Test("An entry that vanishes before it is deleted is skipped, not counted, and does not stop the sweep")
+    func entryVanishingBeforeDeleteIsSkipped() async throws {
+
+        let root = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let names = try await seedTwoExpiredEntries(under: root)
+        let cache = makeCache(agent: SweepFaultAgent(root: root, vanishedOnDelete: [names[0]]), subfolder: nil)
+
+        #expect(try await cache.removeExpired() == 1)
+        #expect(regularFiles(under: root).count == 1)
+    }
+
+    /// A read that fails for any reason other than absence is a fault. The sweep must not launder
+    /// it into "nothing expired", and must not delete an entry it could not read.
+    @Test("A read that fails for a reason other than absence is a fault, and spares every entry")
+    func readFaultSurfacesAndSparesEntries() async throws {
+
+        let root = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        _ = try await seedTwoExpiredEntries(under: root)
+        let written = regularFiles(under: root)
+        let cache = makeCache(agent: UnreadableAgent(root: root), subfolder: nil)
+
+        await #expect(throws: UnreadableAgent.ReadFailure.self) {
+            _ = try await cache.removeExpired()
+        }
+
+        #expect(regularFiles(under: root) == written)
+    }
+
+    /// The promise the doc comment makes about a fault part-way through: the error surfaces, and
+    /// the entries removed before it stay removed. The agent lists in name order, so which entry
+    /// the sweep reaches first is known rather than left to the file system.
+    @Test("A delete that fails is a fault, and the entries removed before it stay removed")
+    func deleteFaultSurfacesAfterPartialProgress() async throws {
+
+        let root = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let names = try await seedTwoExpiredEntries(under: root)
+        let cache = makeCache(agent: SweepFaultAgent(root: root, undeletable: [names[1]]), subfolder: nil)
+
+        await #expect(throws: SweepFaultAgent.DeleteFailure.self) {
+            _ = try await cache.removeExpired()
+        }
+
+        let remaining = regularFiles(under: root).map { URL(filePath: $0).lastPathComponent }
+        #expect(remaining == [names[1]])
+    }
+
+    /// Two expired entries, and their filenames in the order a `SweepFaultAgent` lists them.
+    private func seedTwoExpiredEntries(under root: URL) async throws -> [String] {
+        let seed = makeCache(root: root, subfolder: nil)
+        try await seed.stash(CodableTestValue(count: "expired-a"), duration: expiredAnHourAgo())
+        try await seed.stash(CodableTestValue(count: "expired-b"), duration: expiredAnHourAgo())
+        return regularFiles(under: root).map { URL(filePath: $0).lastPathComponent }.sorted()
+    }
+}
+
 // MARK: - Fixtures
 
 private func makeSandbox() throws -> URL {
@@ -597,10 +865,106 @@ private struct UnreadableAgent: FileSystemContext, Sendable {
     }
 }
 
+/// A sandbox that lists in name order and whose reads and deletes can be made to fail for chosen
+/// files: as an absence, standing in for an entry that vanished after being listed, or as a fault.
+/// Everything else is the real file system.
+private struct SweepFaultAgent: FileSystemContext, Sendable {
+
+    /// The error a chosen delete fails with, distinct from anything Foundation throws.
+    struct DeleteFailure: Error {}
+
+    let sandbox: SandboxAgent
+
+    /// Filenames whose read reports not-found, as if deleted between listing and reading.
+    let vanishedOnRead: Set<String>
+
+    /// Filenames whose delete reports not-found, as if deleted between reading and deleting.
+    let vanishedOnDelete: Set<String>
+
+    /// Filenames whose delete fails for a reason that is not an absence.
+    let undeletable: Set<String>
+
+    init(
+        root: URL,
+        vanishedOnRead: Set<String> = [],
+        vanishedOnDelete: Set<String> = [],
+        undeletable: Set<String> = []
+    ) {
+        self.sandbox = SandboxAgent(root: root)
+        self.vanishedOnRead = vanishedOnRead
+        self.vanishedOnDelete = vanishedOnDelete
+        self.undeletable = undeletable
+    }
+
+    func read(from url: URL) throws -> Data {
+        if vanishedOnRead.contains(url.lastPathComponent) {
+            throw CocoaError(.fileReadNoSuchFile)
+        }
+        return try sandbox.read(from: url)
+    }
+
+    func deleteLocation(at url: URL) throws {
+        if vanishedOnDelete.contains(url.lastPathComponent) {
+            throw CocoaError(.fileNoSuchFile)
+        }
+        if undeletable.contains(url.lastPathComponent) {
+            throw DeleteFailure()
+        }
+        try sandbox.deleteLocation(at: url)
+    }
+
+    /// In name order, so a test can say which entry the sweep reaches first.
+    func contentsOfDirectory(
+        at url: URL,
+        includingPropertiesForKeys keys: [URLResourceKey],
+        options: FileManager.DirectoryEnumerationOptions
+    ) throws -> [URL] {
+        try sandbox.contentsOfDirectory(at: url, includingPropertiesForKeys: keys, options: options)
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    func fileExists(at url: URL) -> Bool { sandbox.fileExists(at: url) }
+
+    func folderExists(at url: URL) -> Bool { sandbox.folderExists(at: url) }
+
+    func moveResource(from fromURL: URL, to toURL: URL) throws {
+        try sandbox.moveResource(from: fromURL, to: toURL)
+    }
+
+    func copyResource(from fromURL: URL, to toURL: URL) throws {
+        try sandbox.copyResource(from: fromURL, to: toURL)
+    }
+
+    func createDirectory(at url: URL) throws { try sandbox.createDirectory(at: url) }
+
+    func removeDirectory(at url: URL) throws { try sandbox.removeDirectory(at: url) }
+
+    func write(_ data: Data, to url: URL, options: NSData.WritingOptions) throws {
+        try sandbox.write(data, to: url, options: options)
+    }
+
+    func url(for directory: FileSystemDirectory) throws -> URL {
+        try sandbox.url(for: directory)
+    }
+}
+
 /// Bytes in the shape of an entry, carrying an item that `CodableTestValue` cannot decode: its
 /// `count` property is gone, which is what renaming a property in a shipped app leaves behind.
+/// The expiry is far in the future, for the tests that are not about expiry.
 private func undecodableRecordData() -> Data {
-    Data(#"{"item":{"quantity":1},"expiry":900000000}"#.utf8)
+    undecodableRecordData(expiry: Date(timeIntervalSinceReferenceDate: 900_000_000))
+}
+
+/// The same bytes with a chosen expiry, written the way the package writes it, as seconds since
+/// the reference date, so the sweep reads it as the package's own.
+private func undecodableRecordData(expiry: Date) -> Data {
+    Data(#"{"item":{"quantity":1},"expiry":\#(expiry.timeIntervalSinceReferenceDate)}"#.utf8)
+}
+
+/// An expiry that has already passed when it is stashed, so the entry is expired on the sweep that
+/// follows without anything having to wait.
+private func expiredAnHourAgo() -> Expiry {
+    .custom(Date().addingTimeInterval(-3600))
 }
 
 /// Every regular file beneath `root`, as paths relative to it. Directories are excluded, so an
