@@ -1,12 +1,13 @@
 # Change Log
-All notable changes to this project will be documented in this file.
- 
-The format is based on [Keep a Changelog](http://keepachangelog.com/)
+Notable changes up to and including 3.0.0 are recorded in this file. From 4.0.0 onwards, release
+notes are published at https://github.com/nashysolutions/cache/releases.
+
+The entries below follow [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## Future versions
+## 4.0.0 and later
 
-No longer maintaining this file.
+See https://github.com/nashysolutions/cache/releases.
 
 ## [3.0.0] - 2023-02-08
 
