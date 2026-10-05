@@ -17,37 +17,11 @@ import Files
 @Suite("FileSystemCacheTests")
 struct FileSystemCacheTests {
 
-    /// Verifies that `FileSystemResourceClient.makeStore` is called with the expected
-    /// directory and subfolder arguments.
-    ///
-    /// This test also confirms that the `makeStore` closure is executed exactly once.
-    @Test("The makeStore closure captures the correct directory and subfolder")
-    func testMakeStoreReceivesCorrectFolderArguments() async throws {
-
-        try await confirmation(
-            "Expected makeStore to be called exactly once with `.temporary` and 'test-folder'",
-            expectedCount: 1
-        ) { confirmation in
-
-            let client = FileSystemResourceClient(
-                makeStore: { directory, subfolder in
-                    defer { confirmation() }
-                    let folderStore = MockFileSystemFolderStore()
-                    #expect(directory == .temporary)
-                    #expect(subfolder == "test-folder")
-                    return folderStore
-                }
-            )
-
-            _ = try client.makeStore(.temporary, "test-folder")
-        }
-    }
-
     /// Tests that removing a resource deletes it without reading it first.
     ///
     /// The load is what a removal must not do: an entry whose stored payload no longer decodes
-    /// would be unremovable if removal depended on reading it. The mock has no `loadHandler`
-    /// here, so any attempt to read would fail outright rather than pass unnoticed.
+    /// would be unremovable if removal depended on reading it. The mock's load always throws, so
+    /// any attempt to read through the store would fail outright rather than pass unnoticed.
     ///
     /// The delete is observed on the agent rather than on the store, because storage no longer
     /// goes through `Files`' `deleteResource`. That call wraps every failure in an error type

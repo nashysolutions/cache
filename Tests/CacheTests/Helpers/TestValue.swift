@@ -7,22 +7,15 @@
 
 import Foundation
 
-struct TestValue: Identifiable, LosslessStringConvertible, Sendable {
+/// An item whose identifier is its only field.
+///
+/// It is `Equatable` so that a test can assert which item a cache served, not merely that it
+/// served one: a cache that answered with the wrong item would pass a presence check.
+struct TestValue: Identifiable, Equatable, Sendable {
 
     let count: String
 
     var id: String { count }
-
-    var description: String { count }
-
-    init(count: String) {
-        self.count = count
-    }
-
-    init?(_ description: String) {
-        guard !description.isEmpty else { return nil }
-        self.count = description
-    }
 }
 
 struct CodableTestValue: Identifiable, Codable {
@@ -47,4 +40,18 @@ struct OtherCodableTestValue: Identifiable, Codable {
     }
 
     let label: String
+}
+
+/// An item whose content can change while its identifier stays the same, for the tests that pin
+/// what a second stash under one identifier does.
+///
+/// None of the types above can express that. Each derives its identifier from its only field, so
+/// two different values of one of them never share an identifier, and stashing "the same
+/// identifier twice" with them only ever stashes the same value twice. It is `Codable` so that one
+/// type serves both caches.
+struct TestDocument: Identifiable, Equatable, Codable, Sendable {
+
+    let id: String
+
+    let body: String
 }
