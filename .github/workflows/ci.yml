@@ -40,8 +40,24 @@ jobs:
           xcodebuild -version
           swift --version
 
+      # The import check fails the build when a target imports a module from
+      # the package graph that its declared dependencies do not provide.
+      # Without it, a target can compile against a module that is only built
+      # because another target asked for it, and then fail for a consumer whose
+      # build does not include that target. The check follows dependencies
+      # transitively, so it does not catch a module that arrives through
+      # another declared dependency; naming every direct import stays the
+      # manifest's job.
+      #
+      # The build system is named because the check has been observed to catch
+      # an undeclared import under SwiftPM's native build system, and Swift 6.4
+      # makes Swift Build the default. Naming it keeps the check where it is
+      # known to work when the runner's toolchain changes, and if the native
+      # build system is removed this step fails outright rather than going
+      # quiet. A failed check still prints "Build complete!", so the exit
+      # status is the only signal, and it is what fails this step.
       - name: swift build
-        run: swift build --build-tests
+        run: swift build --build-tests --build-system native --explicit-target-dependency-import-check error
 
       - name: swift test
         run: swift test
