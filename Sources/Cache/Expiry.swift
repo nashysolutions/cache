@@ -15,13 +15,16 @@ import Foundation
 /// This is typically used in cache management or offline resource fetching systems.
 public enum Expiry: Sendable {
     
-    /// Indicates a short-lived resource, typically valid for **1 minute** from now.
+    /// Indicates a short-lived resource, valid for exactly **1 minute** (60 seconds) from the
+    /// moment it is stashed.
     case short
 
-    /// Indicates a medium-lived resource, typically valid for **3 minutes** from now.
+    /// Indicates a medium-lived resource, valid for exactly **3 minutes** (180 seconds) from the
+    /// moment it is stashed.
     case medium
 
-    /// Indicates a long-lived resource, typically valid for **1 hour** from now.
+    /// Indicates a long-lived resource, valid for exactly **1 hour** (3600 seconds) from the
+    /// moment it is stashed.
     case long
 
     /// Indicates a custom expiration date.

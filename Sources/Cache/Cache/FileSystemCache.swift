@@ -12,7 +12,7 @@ import Files
 ///
 /// `FileSystemCache` provides expiry-aware, asynchronous caching of resources that are stored
 /// on disk using a ``FileSystemDatabase``. It is suitable for use cases where data must be retained
-/// across app launches or shared between components.
+/// across app launches.
 ///
 /// Resources are persisted as `CodableResource` values, allowing for serialisation and deserialisation
 /// using the file system.

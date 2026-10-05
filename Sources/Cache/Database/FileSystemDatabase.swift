@@ -11,7 +11,7 @@ import Files
 /// A file system-backed database implementation that stores identifiable, codable resources.
 ///
 /// `FileSystemDatabase` conforms to ``Database`` and provides persistent storage using a ``FileSystemStorage`` backend.
-/// It is designed for use cases where resource data must survive app restarts or be shared between components.
+/// It is designed for use cases where resource data must survive app restarts.
 ///
 /// - Note: The wrapped item type must conform to both `Identifiable` and `Codable`.
 actor FileSystemDatabase<Item: Identifiable & Codable & Sendable>: Database where Item.ID: LosslessStringConvertible {
