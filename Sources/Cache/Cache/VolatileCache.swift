@@ -12,25 +12,29 @@ import Foundation
 /// `VolatileCache` provides asynchronous, expiry-aware storage for identifiable items.
 /// It wraps a ``VolatileDatabase`` and is suitable for storing non-persistent, runtime-only data.
 ///
-/// Resources are automatically expired based on the provided ``Expiry`` and evicted
-/// when the internal storage exceeds its configured maximum size.
+/// Every entry carries an ``Expiry``, and an expired entry is never served. Nothing bounds the
+/// cache and nothing evicts from it. An expired entry is removed when its identifier is next
+/// looked up, or when ``removeExpired()`` is called. Until then, an entry that is never looked up
+/// again stays in memory for as long as the cache lives.
 ///
 /// - Note: This cache is entirely in-memory and will not retain data between app sessions.
 public struct VolatileCache<Item: Identifiable & Sendable>: DatabaseBackedCache where Item.ID: Sendable & LosslessStringConvertible {
 
     /// The backing volatile database used for storage.
     let database: VolatileDatabase<Item>
-    
+
     /// Creates a new volatile cache instance.
     ///
-    /// By default, it uses the `VolatileDatabase`'s default maximum record limit.
+    /// The cache starts empty and has no record limit: it holds every entry stashed in it until
+    /// that entry is removed.
     public init() {
         database = VolatileDatabase<Item>()
     }
 
     /// Stashes an item in the cache with a given expiry duration.
     ///
-    /// If the cache exceeds its record limit, older entries may be evicted.
+    /// Stashing never removes another entry. An item stashed under an identifier the cache already
+    /// holds replaces the entry for that identifier, expiry included.
     ///
     /// - Parameters:
     ///   - item: The item to store in the cache.

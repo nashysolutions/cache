@@ -19,10 +19,12 @@ final class VolatileStorage<Item: Identifiable & Sendable>: Storage {
     /// The type of resource stored in memory.
     typealias StoredResource = Resource<Item>
 
-    /// The internal storage set containing all cached resources.
+    /// Every cached resource, keyed by the identifier of the item it wraps.
     ///
-    /// This includes all resources, regardless of their expiry status.
-    private var storage = Set<StoredResource>()
+    /// This includes all resources, regardless of their expiry status. Keying by identifier makes
+    /// lookup and removal by identifier constant time, and makes one entry per identifier a
+    /// property of the structure itself rather than of how `Resource` defines equality.
+    private var storage: [Item.ID: StoredResource] = [:]
 
     /// Inserts or updates a resource in the in-memory store.
     ///
@@ -30,7 +32,7 @@ final class VolatileStorage<Item: Identifiable & Sendable>: Storage {
     ///
     /// - Parameter resource: The resource to insert.
     func insert(_ resource: StoredResource) {
-        storage.update(with: resource)
+        storage[resource.identifier] = resource
     }
 
     /// Removes the resource held for the given identifier.
@@ -39,10 +41,7 @@ final class VolatileStorage<Item: Identifiable & Sendable>: Storage {
     ///
     /// - Parameter identifier: The identifier of the item whose resource should be removed.
     func remove(for identifier: Item.ID) {
-        guard let resource = storage.first(where: { $0.identifier == identifier }) else {
-            return
-        }
-        storage.remove(resource)
+        storage[identifier] = nil
     }
 
     /// Removes all resources currently stored in memory.
@@ -56,11 +55,8 @@ final class VolatileStorage<Item: Identifiable & Sendable>: Storage {
     ///
     /// - Parameter identifier: The identifier of the resource to retrieve.
     /// - Returns: The resource matching the identifier, or `nil` if not found.
-    /// - Throws: Rethrows any errors thrown during lookup (currently unused but
-    ///   supports compatibility with throwing storage protocols).
-    func resource(for identifier: Item.ID) throws -> StoredResource? {
-        let predicate: (StoredResource) -> Bool = { $0.identifier == identifier }
-        return storage.first(where: predicate)
+    func resource(for identifier: Item.ID) -> StoredResource? {
+        storage[identifier]
     }
 
     /// Removes every resource whose expiry precedes the given instant.
@@ -68,8 +64,8 @@ final class VolatileStorage<Item: Identifiable & Sendable>: Storage {
     /// - Parameter now: The instant to judge expiry against.
     /// - Returns: The number of resources removed.
     func removeExpired(asOf now: Date) -> Int {
-        let expired = storage.filter { $0.isExpired(asOf: now) }
-        storage.subtract(expired)
-        return expired.count
+        let countBeforeSweep = storage.count
+        storage = storage.filter { !$0.value.isExpired(asOf: now) }
+        return countBeforeSweep - storage.count
     }
 }
