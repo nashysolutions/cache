@@ -16,9 +16,14 @@ import Foundation
 /// Conforming types are responsible for managing item expiry and storage lifecycle,
 /// and must not return expired items from the `resource(for:)` method.
 public protocol Cache<Item>: Sendable {
-    
+
     /// The type of item being stored in the cache.
-    associatedtype Item: Identifiable
+    ///
+    /// Both the item and its identifier must be `Sendable`, because every requirement below is
+    /// asynchronous and nonisolated: a caller isolated to an actor sends any item or identifier
+    /// it passes out of that isolation. Stating the bound here, and not only on each conformer,
+    /// is what lets generic code over `Cache` make those calls from an actor.
+    associatedtype Item: Identifiable & Sendable where Item.ID: Sendable
 
     /// Inserts or updates a cache entry for the given item, using the provided expiry duration.
     ///

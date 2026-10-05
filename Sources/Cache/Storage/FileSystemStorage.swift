@@ -50,7 +50,7 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
     /// - Parameters:
     ///   - fileSystemDirectory: The base file system directory.
     ///   - subfolder: An optional subfolder path within the base directory.
-    public init(
+    init(
         fileSystemDirectory: FileSystemDirectory,
         subfolder: String?
     ) {
