@@ -10,12 +10,10 @@ import Files
 
 /// A persistent, file system–backed cache for identifiable and codable items.
 ///
-/// `FileSystemCache` provides expiry-aware, asynchronous caching of resources that are stored
-/// on disk using a ``FileSystemDatabase``. It is suitable for use cases where data must be retained
-/// across app launches.
+/// `FileSystemCache` provides expiry-aware, asynchronous caching of items that are stored on
+/// disk. It is suitable for use cases where data must be retained across app launches.
 ///
-/// Resources are persisted as `CodableResource` values, allowing for serialisation and deserialisation
-/// using the file system.
+/// Each item is written with its expiry as one JSON file, which is why `Item` must be `Codable`.
 ///
 /// Entries are written into a folder below the directory you nominate, scoped to both the layout
 /// version and `Item`, and never directly into the directory itself. The cache therefore only
