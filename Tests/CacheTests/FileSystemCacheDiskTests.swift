@@ -329,6 +329,28 @@ struct FileSystemCacheMissTests {
         #expect(FileManager.default.fileExists(atPath: entry.path) == false)
     }
 
+    /// The read path's own expiry handling, which the sweep tests do not reach. An expired entry
+    /// is never served, and the read that finds it expired is also what deletes it.
+    ///
+    /// The entry's path is taken from the listing before the read, so "gone afterwards" cannot be
+    /// satisfied by an entry that was never written.
+    @Test("An expired entry reports nil when read, and the read deletes it from disk")
+    func expiredEntryReportsNilAndIsDeletedByTheRead() async throws {
+
+        let root = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let cache = makeCache(root: root, subfolder: nil)
+        try await cache.stash(CodableTestValue(count: "1"), duration: expiredAnHourAgo())
+
+        let entry = root.appending(path: try #require(regularFiles(under: root).first))
+
+        let retrieved = try await cache.resource(for: "1")
+
+        #expect(retrieved == nil)
+        #expect(FileManager.default.fileExists(atPath: entry.path) == false)
+    }
+
     /// The other half of the distinction. A fault must not be laundered into a miss, and the
     /// self-healing delete must not reach an entry that was merely unreadable this once.
     @Test("A read that fails for a reason other than a miss surfaces, and spares the entry")
