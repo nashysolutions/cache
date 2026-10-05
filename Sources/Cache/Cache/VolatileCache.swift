@@ -10,7 +10,7 @@ import Foundation
 /// A lightweight, in-memory cache implementation.
 ///
 /// `VolatileCache` provides asynchronous, expiry-aware storage for identifiable items.
-/// It wraps a ``VolatileDatabase`` and is suitable for storing non-persistent, runtime-only data.
+/// It is suitable for storing non-persistent, runtime-only data.
 ///
 /// Every entry carries an ``Expiry``, and an expired entry is never served. Nothing bounds the
 /// cache and nothing evicts from it. An expired entry is removed when its identifier is next

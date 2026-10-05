@@ -30,7 +30,7 @@ written on one launch is not found on the next, and different for different iden
 items share one file and each overwrites the other. `UUID`, `String` and the integer types meet
 both conditions. Nothing checks either one for you.
 
-The file body is a `CodableResource` encoded with a default `JSONEncoder`, which is a JSON object
+The file body is the item and its expiry, encoded with a default `JSONEncoder` as a JSON object
 with exactly two keys:
 
 ```json
