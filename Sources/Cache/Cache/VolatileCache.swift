@@ -18,7 +18,7 @@ import Foundation
 /// again stays in memory for as long as the cache lives.
 ///
 /// - Note: This cache is entirely in-memory and will not retain data between app sessions.
-public struct VolatileCache<Item: Identifiable & Sendable>: DatabaseBackedCache where Item.ID: Sendable & LosslessStringConvertible {
+public struct VolatileCache<Item: Identifiable & Sendable>: DatabaseBackedCache where Item.ID: Sendable {
 
     /// The backing volatile database used for storage.
     let database: VolatileDatabase<Item>

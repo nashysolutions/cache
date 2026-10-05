@@ -14,17 +14,16 @@ import Files
 /// It is designed for use cases where resource data must survive app restarts.
 ///
 /// - Note: The wrapped item type must conform to both `Identifiable` and `Codable`.
-actor FileSystemDatabase<Item: Identifiable & Codable & Sendable>: Database where Item.ID: LosslessStringConvertible {
+actor FileSystemDatabase<Item: Identifiable & Codable & Sendable>: Database where Item.ID: CustomStringConvertible {
 
     /// The file system storage used to persist resources.
     let storage: FileSystemStorage<Item>
 
     /// Creates a new file system-backed database.
     ///
-    /// Favors the hash-based filename strategy and enforces that `Item.ID`
-    /// conforms to `LosslessStringConvertible` to maintain compatibility with
-    /// public API that relies on lossless identifiers while still using hashed
-    /// filenames for robustness.
+    /// `Item.ID` must be `CustomStringConvertible` because ``FileSystemStorage`` names each entry
+    /// by a digest of the identifier's `description`, so that text must be the same on every launch
+    /// and different for different identifiers.
     ///
     /// - Parameters:
     ///   - fileSystemDirectory: The base directory where resources are stored.
@@ -32,7 +31,7 @@ actor FileSystemDatabase<Item: Identifiable & Codable & Sendable>: Database wher
     init(
         fileSystemDirectory: FileSystemDirectory,
         subfolder: String? = nil
-    ) where Item.ID: LosslessStringConvertible {
+    ) {
         self.storage = FileSystemStorage<Item>(
             fileSystemDirectory: fileSystemDirectory,
             subfolder: subfolder

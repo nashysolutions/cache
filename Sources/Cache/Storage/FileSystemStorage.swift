@@ -26,7 +26,7 @@ import Files
 /// means the error a caller sees is the file system's own.
 ///
 /// - Note: This storage requires items to conform to both `Identifiable` and `Codable`.
-final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableStorage  where Item.ID: LosslessStringConvertible {
+final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableStorage where Item.ID: CustomStringConvertible {
 
     /// The stored resource type used by this storage.
     typealias StoredResource = CodableResource<Item>
@@ -280,6 +280,11 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
     }
 
     /// Constructs a filename from the given identifier.
+    ///
+    /// The text hashed is the identifier's `description`. Because `Item.ID` is constrained to
+    /// `CustomStringConvertible`, `String(describing:)` resolves to `description` at compile time.
+    /// Without that constraint it would be resolved at run time instead, which prefers a type's
+    /// `TextOutputStreamable` output where it has one, and could move an existing entry.
     ///
     /// - Parameter identifier: The identifier of the item.
     /// - Returns: A string representing the filename.

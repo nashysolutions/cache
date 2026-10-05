@@ -21,8 +21,14 @@ An entry is written to:
 - `cache-v2` is chosen by this package and identifies the layout version.
 - `<type>` is the lowercase hexadecimal SHA-256 digest of `Item`'s fully qualified name, and is
   what keeps two caches over different item types from reaching each other.
-- `<digest>` is the same digest of the item identifier's description.
+- `<digest>` is the same digest of the item identifier's `description`.
 - `.cache` is the entry extension.
+
+That is why ``FileSystemCache`` requires `Item.ID` to be `CustomStringConvertible`. The
+identifier's `description` names its file, so it must be the same on every launch, or an entry
+written on one launch is not found on the next, and different for different identifiers, or two
+items share one file and each overwrites the other. `UUID`, `String` and the integer types meet
+both conditions. Nothing checks either one for you.
 
 The file body is a `CodableResource` encoded with a default `JSONEncoder`, which is a JSON object
 with exactly two keys:
