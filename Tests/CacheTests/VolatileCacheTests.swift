@@ -51,7 +51,25 @@ struct VolatileCacheTests {
         let resource = try await cache.resource(for: identifier)
         #expect(resource == nil)
     }
-    
+
+    /// Pins replace semantics: a second stash under an identifier the cache already holds
+    /// replaces the first, rather than being ignored.
+    ///
+    /// The two documents share an identifier and differ only in their body, so the read can tell
+    /// "the second stash won" from "the first stash was kept". ``TestValue`` cannot do this,
+    /// because its identifier is its only field.
+    @Test("A second stash under the same identifier replaces the first")
+    func secondStashUnderSameIdentifierReplacesTheFirst() async throws {
+        let cache = VolatileCache<TestDocument>()
+        let first = TestDocument(id: "1", body: "first draft")
+        let second = TestDocument(id: "1", body: "second draft")
+
+        try await cache.stash(first, duration: .long)
+        try await cache.stash(second, duration: .long)
+
+        #expect(try await cache.resource(for: "1") == second)
+    }
+
     @Test("Resource is not expired before custom duration")
     func testResourceIsNotExpiredBeforeCustomDuration() async throws {
         // Given: A short custom expiry (2 seconds from now)
@@ -62,9 +80,9 @@ struct VolatileCacheTests {
 
         try await cache.stash(item, duration: expiry)
 
-        // Then: The resource should not be expired
+        // Then: The resource should not be expired, and should be the item that was stashed
         let resource = try await cache.resource(for: identifier)
-        #expect(resource != nil)
+        #expect(resource == item)
     }
 
     @Test("Resource is expired after custom duration")

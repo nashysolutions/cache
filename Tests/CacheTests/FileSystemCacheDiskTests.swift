@@ -112,6 +112,72 @@ struct FileSystemCacheDiskTests {
         #expect(regularFiles(under: root) == ["shared/cache-v2/\(type)/\(digest).cache"])
     }
 
+    /// Pins that a cache asks its client for the directory and the subfolder it was configured
+    /// with.
+    ///
+    /// The documented-path test above cannot see the directory. ``SandboxAgent`` resolves every
+    /// directory to the same root, so a cache that ignored the directory it was given and always
+    /// asked for `.documents` would pass it. Here each directory resolves to a folder of its own,
+    /// so where the entry lands says which directory was asked for. Every case is tried, because
+    /// a cache that hard-coded one directory would still get that one right.
+    @Test("An entry is written under the directory and subfolder the cache was configured with")
+    func entryIsWrittenUnderTheConfiguredDirectory() async throws {
+
+        let root = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let directories: [FileSystemDirectory] = [.documents, .caches, .applicationSupport, .temporary]
+
+        for directory in directories {
+
+            let cache = withDependencies {
+                $0.fileSystemResourceClient = FileSystemResourceClient { requested, subfolder in
+                    let folder = root.appending(
+                        component: String(describing: requested),
+                        directoryHint: .isDirectory
+                    )
+                    return try FileSystemFolderStore(
+                        agent: SandboxAgent(root: folder),
+                        kind: requested,
+                        subfolder: subfolder
+                    )
+                }
+            } operation: {
+                FileSystemCache<CodableTestValue>(directory, subfolder: "configured")
+            }
+
+            let before = regularFiles(under: root)
+            try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+            let written = regularFiles(under: root).subtracting(before)
+
+            #expect(written.count == 1, "\(directory)")
+            #expect(written.allSatisfy { $0.hasPrefix("\(directory)/configured/") }, "\(directory)")
+        }
+    }
+
+    /// Pins replace semantics on disk: a second stash under an identifier the cache already holds
+    /// replaces the first entry, rather than being ignored or written beside it.
+    ///
+    /// There are two observables because each catches a different way of getting this wrong. The
+    /// read says which stash won. The file count says the first entry did not survive alongside
+    /// the second, which a read alone cannot show.
+    @Test("A second stash under the same identifier replaces the first, leaving one entry")
+    func secondStashUnderSameIdentifierReplacesTheFirst() async throws {
+
+        let root = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let cache = makeCache(TestDocument.self, root: root, subfolder: nil)
+        let first = TestDocument(id: "1", body: "first draft")
+        let second = TestDocument(id: "1", body: "second draft")
+
+        try await cache.stash(first, duration: .long)
+        try await cache.stash(second, duration: .long)
+
+        #expect(try await cache.resource(for: "1") == second)
+        #expect(regularFiles(under: root).count == 1)
+    }
+
     /// A file the consumer wrote must survive the cache being used, even when its contents happen
     /// to have the same shape as a cache entry.
     ///

@@ -8,8 +8,13 @@
 import Foundation
 import Files
 
+/// A `FileSystemOperations` store that records which of its methods were called and keeps
+/// nothing.
+///
+/// A load always throws, because the store holds nothing to load. Any test that reaches a load
+/// therefore fails outright, rather than being handed a value the cache never wrote.
 final class MockFileSystemFolderStore<Folder: Directory>: FileSystemOperations {
-    
+
     enum Endpoint {
         case saveResource
         case loadResource
@@ -21,16 +26,9 @@ final class MockFileSystemFolderStore<Folder: Directory>: FileSystemOperations {
 
     let folder: Folder
     let agent: DummyAgent
-    
+
     private(set) var called: [Endpoint] = []
 
-    var saveHandler: ((AnyResourceBox, String) throws -> Void)?
-    var loadHandler: ((String) throws -> AnyResourceBox)?
-    var deleteHandler: ((String) throws -> Void)?
-    var updateHandler: ((String, (inout Any) -> Void) throws -> Void)?
-    var saveDataHandler: ((Data, String) throws -> Void)?
-    var loadDataHandler: ((String) throws -> Data)?
-    
     init(agent: DummyAgent = DummyAgent(), folder: Folder = DummyFolder()) {
         self.agent = agent
         self.folder = folder
@@ -38,34 +36,27 @@ final class MockFileSystemFolderStore<Folder: Directory>: FileSystemOperations {
 
     func saveResource<Resource: Encodable>(_ resource: Resource, filename name: String) throws {
         called.append(.saveResource)
-        try saveHandler?(AnyResourceBox(resource), name)
     }
 
     func loadResource<Resource: Decodable>(filename: String) throws -> Resource {
         called.append(.loadResource)
-        let box = try loadHandler?(filename) ?? {
-            throw NSError(domain: "mock", code: 1)
-        }()
-        return try box.cast(to: Resource.self)
+        throw NSError(domain: "mock", code: 1)
     }
 
     func deleteResource(filename: String) throws {
         called.append(.deleteResource)
-        try deleteHandler?(filename)
     }
 
     func updateResource<Resource: Codable>(filename name: String, modify: (inout Resource) -> Void) throws {
         called.append(.updateResource)
-        // Stub
     }
 
     func saveData(_ data: Data, withName name: String) throws {
         called.append(.saveData)
-        try saveDataHandler?(data, name)
     }
 
     func loadData(named name: String) throws -> Data {
         called.append(.loadData)
-        return try loadDataHandler?(name) ?? Data()
+        return Data()
     }
 }
