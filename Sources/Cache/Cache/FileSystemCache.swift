@@ -36,17 +36,20 @@ import Files
 ///   A cache nominating it will create a folder there on first use. Before this package shipped a
 ///   live file system client, that write silently went nowhere, so an app that nominated
 ///   `.documents` and appeared to write nothing now writes something.
-public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: DatabaseBackedCache where Item.ID: Sendable & LosslessStringConvertible {
+public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: DatabaseBackedCache where Item.ID: Sendable & CustomStringConvertible {
 
     /// The backing file system–based database.
     let database: FileSystemDatabase<Item>
 
     /// Creates a new file system–backed cache.
     ///
-    /// Favors the hash-based filename strategy and enforces that `Item.ID`
-    /// conforms to `LosslessStringConvertible` to maintain compatibility with
-    /// public API that relies on lossless identifiers while still using hashed
-    /// filenames for robustness.
+    /// `Item.ID` must be `CustomStringConvertible` because an entry's filename is a digest of the
+    /// identifier's `description`. That text must therefore be the same for an identifier on every
+    /// launch, or an entry written on one launch is not found on the next, and different for
+    /// different identifiers, or two items share one entry and each overwrites the other. `UUID`,
+    /// `String` and the integer types meet both conditions. The compiler can check neither, so a
+    /// `description` that includes a memory address, or anything else that varies, still compiles,
+    /// and the cache then fails to find what it wrote.
     ///
     /// - Parameters:
     ///   - fileSystemDirectory: The root directory in which resources will be stored.
@@ -54,7 +57,7 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
     public init(
         _ fileSystemDirectory: FileSystemDirectory,
         subfolder: String? = nil
-    ) where Item.ID: LosslessStringConvertible {
+    ) {
         database = FileSystemDatabase<Item>(
             fileSystemDirectory: fileSystemDirectory,
             subfolder: subfolder

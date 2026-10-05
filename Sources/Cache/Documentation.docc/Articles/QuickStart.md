@@ -4,9 +4,12 @@ This article explains how to get started quickly.
 
 ## Overview
 
-Your model must conform to `Identifiable` and `Sendable`, and its `id` must conform to
-`LosslessStringConvertible`. You have the option of a ``VolatileCache`` or a ``FileSystemCache``.
-If you choose ``FileSystemCache``, then your model must also conform to `Codable`.
+Your model must conform to `Identifiable` and `Sendable`. You have the option of a
+``VolatileCache`` or a ``FileSystemCache``. If you choose ``FileSystemCache``, then your model must
+also conform to `Codable`, and its `id` must conform to `CustomStringConvertible`, as `UUID`,
+`String` and the integer types already do. Each entry on disk is named by a digest of the `id`'s
+`description`, so that text must be the same on every launch and different for different
+identifiers.
 
 ```swift
 import Cache
