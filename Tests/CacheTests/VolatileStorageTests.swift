@@ -26,7 +26,7 @@ struct VolatileStorageTests {
     }
 
     @Test("Resources whose expiry precedes the instant are removed; the rest are kept")
-    func sweepRemovesOnlyResourcesExpiredAsOfTheInstant() throws {
+    func sweepRemovesOnlyResourcesExpiredAsOfTheInstant() {
 
         let storage = VolatileStorage<TestValue>()
         storage.insert(resource("expired", expiringAt: now.addingTimeInterval(-1)))
@@ -35,20 +35,20 @@ struct VolatileStorageTests {
         let removed = storage.removeExpired(asOf: now)
 
         #expect(removed == 1)
-        #expect(try storage.resource(for: "expired") == nil)
-        #expect(try storage.resource(for: "live")?.item.count == "live")
+        #expect(storage.resource(for: "expired") == nil)
+        #expect(storage.resource(for: "live")?.item.count == "live")
     }
 
     /// Pins the boundary. Expiry is `expiry < now`, so a resource whose expiry is the instant
     /// itself has not expired at that instant; it has expired at any instant after it.
     @Test("A resource whose expiry is the instant itself is not yet expired")
-    func resourceExpiringAtTheInstantIsKept() throws {
+    func resourceExpiringAtTheInstantIsKept() {
 
         let storage = VolatileStorage<TestValue>()
         storage.insert(resource("on-the-instant", expiringAt: now))
 
         #expect(storage.removeExpired(asOf: now) == 0)
-        #expect(try storage.resource(for: "on-the-instant") != nil)
+        #expect(storage.resource(for: "on-the-instant") != nil)
         #expect(storage.removeExpired(asOf: now.addingTimeInterval(0.001)) == 1)
     }
 
@@ -56,4 +56,42 @@ struct VolatileStorageTests {
     func sweepOfEmptyStorageReportsZero() {
         #expect(VolatileStorage<TestValue>().removeExpired(asOf: now) == 0)
     }
+}
+
+/// Pins that the in-memory store holds one entry per identifier.
+///
+/// A second insert under an identifier the store already holds must replace that entry, neither
+/// sitting beside it nor being ignored in its favour.
+@Suite("VolatileStorage insertion")
+struct VolatileStorageInsertionTests {
+
+    @Test("Storing twice under one identifier keeps one entry and serves the newer value")
+    func insertUnderAHeldIdentifierReplacesTheEntry() {
+
+        let storage = VolatileStorage<KeyedValue>()
+        let olderExpiry = Date(timeIntervalSinceReferenceDate: 1_000_000)
+        let newerExpiry = olderExpiry.addingTimeInterval(60)
+
+        storage.insert(Resource(item: KeyedValue(id: "key", payload: "older"), expiry: olderExpiry))
+        storage.insert(Resource(item: KeyedValue(id: "key", payload: "newer"), expiry: newerExpiry))
+
+        let held = storage.resource(for: "key")
+        #expect(held?.item.payload == "newer")
+        #expect(held?.expiry == newerExpiry)
+
+        // A sweep at an instant after every expiry removes every entry, so its count is the
+        // number of entries held. Storage has no other way to report it.
+        #expect(storage.removeExpired(asOf: .distantFuture) == 1)
+    }
+}
+
+/// An item whose identifier is independent of its payload.
+///
+/// ``TestValue`` derives its identifier from its only field, so it cannot hold two different values
+/// under one identifier, which is the case the replacement test needs.
+private struct KeyedValue: Identifiable, Sendable {
+
+    let id: String
+
+    let payload: String
 }
