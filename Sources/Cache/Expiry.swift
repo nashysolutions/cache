@@ -34,11 +34,15 @@ public enum Expiry: Sendable {
 
     /// Computes the absolute expiry `Date` using the provided base time.
     ///
-    /// - Parameter now: The reference time from which to compute expiry.
-    ///   Defaults to the current date and time.
+    /// The base time has no default. Each cache passes the time it read from
+    /// `@Dependency(\.date)`, and a default would be a way to read the wall clock that bypasses
+    /// that dependency, so a test that pinned the time would no longer govern expiry.
+    ///
+    /// - Parameter now: The moment the item is stashed, from which a preset is counted. A custom
+    ///   expiry ignores it.
     ///
     /// - Returns: A `Date` representing the exact expiration time.
-    func date(using now: Date = Date()) -> Date {
+    func date(using now: Date) -> Date {
         switch self {
         case .short: return now.addingTimeInterval(60 * 1)
         case .medium: return now.addingTimeInterval(60 * 3)

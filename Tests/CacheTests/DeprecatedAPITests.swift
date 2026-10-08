@@ -7,6 +7,8 @@
 
 import Testing
 import Foundation
+import Dependencies
+import DependenciesTestSupport
 
 import Cache
 
@@ -113,7 +115,7 @@ struct DeprecatedAPITests {
 
     /// The default is reached only by a conformance that has no sweep. Both caches in the package
     /// have one, and generic code over `Cache` must reach it, not the default.
-    @Test("Generic code sweeping a package cache reaches its own sweep, not the default")
+    @Test("Generic code sweeping a package cache reaches its own sweep, not the default", .dependency(\.date.now, pinnedNow))
     func packageCacheDoesNotUseTheDefault() async throws {
 
         let cache = VolatileCache<TestValue>()

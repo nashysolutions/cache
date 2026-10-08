@@ -29,12 +29,18 @@ protocol ResourceProvider: Actor {
     /// - Throws: An error if the operation fails (e.g. due to encoding, storage, or access issues).
     func stash(_ resource: StoredResource) throws
 
-    /// Retrieves a resource for the given identifier, if it exists and is not expired.
+    /// Retrieves a resource for the given identifier, if it exists and is not expired at the given
+    /// instant.
     ///
-    /// - Parameter identifier: The identifier of the item to load.
+    /// The instant is a parameter rather than read here, so that the cache's clock is the only
+    /// source of the current time.
+    ///
+    /// - Parameters:
+    ///   - identifier: The identifier of the item to load.
+    ///   - now: The instant to judge expiry against.
     /// - Returns: The valid resource if found, or `nil` if no resource exists or it is expired.
     /// - Throws: An error if the operation fails (e.g. due to decoding or file access errors).
-    func resource(for identifier: Item.ID) throws -> StoredResource?
+    func resource(for identifier: Item.ID, asOf now: Date) throws -> StoredResource?
 
     /// Removes a resource by identifier, if it exists.
     ///
@@ -47,9 +53,10 @@ protocol ResourceProvider: Actor {
     /// - Throws: An error if the operation fails or the store cannot be cleared.
     func removeAll() throws
 
-    /// Removes every resource that has expired.
+    /// Removes every resource that had expired at the given instant.
     ///
+    /// - Parameter now: The instant to judge expiry against.
     /// - Returns: The number of resources removed.
     /// - Throws: An error if the operation fails.
-    func removeExpired() throws -> Int
+    func removeExpired(asOf now: Date) throws -> Int
 }
