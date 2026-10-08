@@ -61,6 +61,27 @@ import Foundation
 /// It is a check made before the operation, not a lock held during it. A link created inside the
 /// base directory between the check and the write is not seen. Creating one needs write access to
 /// that directory, which is already enough to replace anything the cache stores there.
+///
+/// ## An entry's own filename
+///
+/// The rule above covers the folder, not each entry inside it. A symbolic link at an entry's own
+/// filename is handled by the operation that meets it, and none of them follows it:
+///
+/// - **A write replaces the link.** ``FileSystemStorage`` writes every entry atomically: the
+///   bytes go to a temporary file beside the entry, which is then renamed over the entry's
+///   filename. A rename replaces a link rather than following it, so nothing is written where the
+///   link points. This holds with no check beforehand, so there is no window between a check and
+///   the write.
+/// - **A read does not serve what the link points to.** A link at an entry's filename is never an
+///   entry, because this package writes only regular files there. The read path asks
+///   ``isSymbolicLink(_:)`` first, and treats a link like an entry that does not decode: it reports
+///   a miss and deletes the link. That is a check made before the read, so a link created between
+///   the two is followed, on the same precondition as above.
+/// - **A delete removes the link itself.** The live file system context deletes through
+///   `FileManager`, which deletes a link, not its target.
+///
+/// The write is the operation that could change a file outside the base directory, and it is
+/// protected without a check, so the window that the read leaves does not apply to it.
 enum FileSystemContainment {
 
     /// Confirms that a folder below the base directory resolves inside it.
@@ -147,7 +168,10 @@ enum FileSystemContainment {
     }
 
     /// Whether the last component of a path is a symbolic link, without following it.
-    private static func isSymbolicLink(_ path: String) -> Bool {
+    ///
+    /// Like the rest of this type, it asks the real file system. For a location that is not on
+    /// it, the answer is `false`.
+    static func isSymbolicLink(_ path: String) -> Bool {
         (try? FileManager.default.destinationOfSymbolicLink(atPath: path)) != nil
     }
 }
