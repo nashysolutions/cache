@@ -19,7 +19,7 @@ import CryptoKit
 ///
 /// An entry lives at `<base>/[<subfolder>/]cache-v2/<type>/<digest>.cache`, where `<type>` is the
 /// lowercase hexadecimal SHA-256 of the item type's fully qualified name and `<digest>` is the
-/// same digest of the item identifier's description. The file itself is a `CodableResource`
+/// same digest of the item identifier's description. The file itself is a `CodableEntry`
 /// encoded by ``makeEntryEncoder()``: a JSON object with exactly the keys `item` and `expiry`,
 /// where `expiry` is a number of seconds since 1 January 2001.
 ///

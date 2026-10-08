@@ -7,14 +7,14 @@
 
 import Foundation
 
-/// A protocol for types that provide access to `Resource`-wrapped items, including lifecycle operations like insert, fetch, and delete.
+/// A protocol for types that provide access to entry-wrapped items, including lifecycle operations like insert, fetch, and delete.
 ///
 /// `ResourceProvider` defines a common interface for interacting with a resource store,
 /// supporting operations such as saving, loading, and purging resources based on their identifier.
 ///
 /// Conforming types are expected to handle expired resources gracefully during lookup or removal.
 protocol ResourceProvider: Actor {
-    
+
     /// The underlying identifiable item type associated with the stored resource.
     associatedtype Item: Identifiable
 
