@@ -126,9 +126,7 @@ struct FileSystemCacheDiskTests {
         let root = try makeSandbox()
         defer { try? FileManager.default.removeItem(at: root) }
 
-        let directories: [FileSystemDirectory] = [.documents, .caches, .applicationSupport, .temporary]
-
-        for directory in directories {
+        for directory in CacheDirectory.allCases {
 
             let cache = withDependencies {
                 $0.fileSystemResourceClient = FileSystemResourceClient { requested, subfolder in

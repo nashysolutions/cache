@@ -37,7 +37,8 @@ import Files
 /// The same holds for a subfolder that leads outside the directory you nominate. Every operation
 /// checks the folder it is about to use before creating anything below that directory, and
 /// refuses one that resolves outside it by throwing `CocoaError.fileWriteInvalidFileName`, so the
-/// cache never writes outside it. See ``init(_:subfolder:)`` for what a subfolder may contain.
+/// cache never writes outside it. See ``init(_:subfolder:)-(CacheDirectory,_)`` for what a
+/// subfolder may contain.
 ///
 /// - Important: On a non-sandboxed macOS process, `.documents` is the user's real `~/Documents`.
 ///   A cache nominating it will create a folder there on first use. Before this package shipped a
@@ -63,12 +64,12 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
     ///
     /// ## Subfolder
     ///
-    /// A subfolder is a path below `fileSystemDirectory`, and may be nested, such as
-    /// `"Cheeses/Soft"`. It must stay inside that directory, and every operation refuses one that
-    /// does not by throwing `CocoaError.fileWriteInvalidFileName`, carrying the folder's location
-    /// in the error's `url`. Nothing is created or written below `fileSystemDirectory` when that
-    /// happens. The directory itself is still created if it is missing, because every operation
-    /// resolves it first in order to check the subfolder against it. A subfolder is refused when:
+    /// A subfolder is a path below `directory`, and may be nested, such as `"Cheeses/Soft"`. It
+    /// must stay inside that directory, and every operation refuses one that does not by throwing
+    /// `CocoaError.fileWriteInvalidFileName`, carrying the folder's location in the error's `url`.
+    /// Nothing is created or written below `directory` when that happens. The directory itself is
+    /// still created if it is missing, because every operation resolves it first in order to check
+    /// the subfolder against it. A subfolder is refused when:
     ///
     /// - it has a `..` component, such as `"../Documents"` or `"a/../b"`, wherever it would lead;
     /// - it passes through a symbolic link that leads outside the directory, or one that cannot be
@@ -83,12 +84,27 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
     /// directory; it does not stop it naming a different folder inside it.
     ///
     /// - Parameters:
-    ///   - fileSystemDirectory: The root directory in which resources will be stored.
-    ///   - subfolder: An optional path below `fileSystemDirectory` used to scope the cache
-    ///     contents. Defaults to `nil`.
+    ///   - directory: The root directory in which resources will be stored.
+    ///   - subfolder: An optional path below `directory` used to scope the cache contents.
+    ///     Defaults to `nil`.
     public init(
-        _ fileSystemDirectory: FileSystemDirectory,
+        _ directory: CacheDirectory,
         subfolder: String? = nil
+    ) {
+        self.init(fileSystemDirectory: directory.fileSystemDirectory, subfolder: subfolder)
+    }
+
+    /// Creates a cache below a directory named the way the `Files` package names it.
+    ///
+    /// Both public initialisers come through here, so a cache built either way is configured the
+    /// same way.
+    ///
+    /// - Parameters:
+    ///   - fileSystemDirectory: The root directory in which resources will be stored.
+    ///   - subfolder: An optional path below `fileSystemDirectory`.
+    init(
+        fileSystemDirectory: FileSystemDirectory,
+        subfolder: String?
     ) {
         database = FileSystemDatabase<Item>(
             fileSystemDirectory: fileSystemDirectory,

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Files
 
 // Shims that keep code written against 6.0.0 compiling, each with a deprecation warning that names
 // what to do instead. Everything in this file is removed in 8.0.0.
@@ -133,5 +134,37 @@ extension Cache {
                 NSDebugDescriptionErrorKey: "\(Self.self) does not implement removeExpired(), so no expired entries were removed."
             ]
         )
+    }
+}
+
+extension FileSystemCache {
+
+    /// Creates a new file system–backed cache below a `FileSystemDirectory` from the `Files`
+    /// package.
+    ///
+    /// 6.0.0 took a `FileSystemDirectory` here. An adopter cannot name that type without importing
+    /// `Files`, and under member import visibility (SE-0444) cannot pass one of its cases with a
+    /// leading dot without importing it either. ``init(_:subfolder:)-(CacheDirectory,_)`` takes a
+    /// ``CacheDirectory``, declared in this package, and each of its cases resolves to the same
+    /// directory as the `FileSystemDirectory` case of the same name, so a cache built either way
+    /// reads and writes in the same place.
+    ///
+    /// A call that names the directory with a leading dot, such as `FileSystemCache(.caches)`,
+    /// already resolves to the ``CacheDirectory`` initialiser, so it needs no change and raises no
+    /// warning. This initialiser is marked as the less preferred overload for exactly that reason:
+    /// without it, such a call would match both initialisers and stop compiling. Only a call that
+    /// passes a `FileSystemDirectory` value reaches this one.
+    ///
+    /// - Parameters:
+    ///   - fileSystemDirectory: The root directory in which resources will be stored.
+    ///   - subfolder: An optional path below `fileSystemDirectory` used to scope the cache
+    ///     contents. Defaults to `nil`.
+    @available(*, deprecated, message: "Pass a CacheDirectory instead, such as FileSystemCache(CacheDirectory.caches, subfolder:). Each case names the same directory as the FileSystemDirectory case of the same name. This initialiser is removed in 8.0.0.")
+    @_disfavoredOverload
+    public init(
+        _ fileSystemDirectory: FileSystemDirectory,
+        subfolder: String? = nil
+    ) {
+        self.init(fileSystemDirectory: fileSystemDirectory, subfolder: subfolder)
     }
 }
