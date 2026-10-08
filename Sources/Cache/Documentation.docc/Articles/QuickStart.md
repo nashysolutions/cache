@@ -52,7 +52,8 @@ layout, and for what this package will and will not delete.
 
 A lookup for an identifier you have not stashed reports `nil` rather than throwing, and so does an
 entry whose stored payload no longer decodes. An error means the operation could not be completed:
-a cache directory that cannot be created or searched, or an entry that cannot be read. An
+a cache directory that cannot be created or searched, an entry that cannot be read, or a subfolder
+that leads outside the directory you nominated, which every operation refuses. An
 identifier the cache cannot look for is not the same as one it does not hold, so the first throws
 and the second does not.
 
