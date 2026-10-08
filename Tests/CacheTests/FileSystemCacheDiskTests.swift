@@ -240,7 +240,7 @@ struct FileSystemCacheDiskTests {
         // is exactly what this package wrote back then.
         let orphan = root.appending(component: String(repeating: "a", count: 64))
         let body = try JSONEncoder().encode(
-            CodableResource(
+            CodableEntry(
                 item: CodableTestValue(count: "orphan"),
                 expiry: Date(timeIntervalSince1970: 1_700_000_000)
             )

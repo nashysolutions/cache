@@ -21,8 +21,8 @@ struct VolatileStorageTests {
     /// The instant every test below judges against.
     private let now = Date(timeIntervalSinceReferenceDate: 1_000_000)
 
-    private func resource(_ count: String, expiringAt expiry: Date) -> Resource<TestValue> {
-        Resource(item: TestValue(count: count), expiry: expiry)
+    private func resource(_ count: String, expiringAt expiry: Date) -> Entry<TestValue> {
+        Entry(item: TestValue(count: count), expiry: expiry)
     }
 
     @Test("Resources whose expiry precedes the instant are removed; the rest are kept")
@@ -72,8 +72,8 @@ struct VolatileStorageInsertionTests {
         let olderExpiry = Date(timeIntervalSinceReferenceDate: 1_000_000)
         let newerExpiry = olderExpiry.addingTimeInterval(60)
 
-        storage.insert(Resource(item: KeyedValue(id: "key", payload: "older"), expiry: olderExpiry))
-        storage.insert(Resource(item: KeyedValue(id: "key", payload: "newer"), expiry: newerExpiry))
+        storage.insert(Entry(item: KeyedValue(id: "key", payload: "older"), expiry: olderExpiry))
+        storage.insert(Entry(item: KeyedValue(id: "key", payload: "newer"), expiry: newerExpiry))
 
         let held = storage.resource(for: "key")
         #expect(held?.item.payload == "newer")

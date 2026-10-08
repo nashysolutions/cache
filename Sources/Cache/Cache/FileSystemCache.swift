@@ -71,7 +71,7 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
     ///   - duration: The expiry policy to apply.
     /// - Throws: An error if the item could not be saved to disk.
     public func stash(_ item: Item, duration: Expiry) async throws {
-        let resource = CodableResource(item: item, expiry: duration.date())
+        let resource = CodableEntry(item: item, expiry: duration.date())
         try await database.stash(resource)
     }
 

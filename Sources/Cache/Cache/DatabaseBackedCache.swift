@@ -16,7 +16,7 @@ protocol DatabaseBackedCache: Cache {
 
     /// The underlying database used to manage cached resources.
     ///
-    /// The database is responsible for storing and retrieving `Resource`-wrapped items, and for
+    /// The database is responsible for storing and retrieving entry-wrapped items, and for
     /// removing an expired one when it is looked up. It evicts nothing else.
     associatedtype D: Database where D.Item == Item
 

@@ -7,7 +7,7 @@
 
 import Foundation
 
-/// An in-memory, actor-isolated storage system for `Resource`-wrapped items.
+/// An in-memory, actor-isolated storage system for `Entry`-wrapped items.
 ///
 /// `VolatileStorage` is a lightweight, non-persistent storage backend designed
 /// for fast insertions, removals, and lookups of identifiable resources.
@@ -17,13 +17,13 @@ import Foundation
 final class VolatileStorage<Item: Identifiable & Sendable>: Storage {
 
     /// The type of resource stored in memory.
-    typealias StoredResource = Resource<Item>
+    typealias StoredResource = Entry<Item>
 
     /// Every cached resource, keyed by the identifier of the item it wraps.
     ///
     /// This includes all resources, regardless of their expiry status. Keying by identifier makes
     /// lookup and removal by identifier constant time, and makes one entry per identifier a
-    /// property of the structure itself rather than of how `Resource` defines equality.
+    /// property of the structure itself rather than of how `Entry` defines equality.
     private var storage: [Item.ID: StoredResource] = [:]
 
     /// Inserts or updates a resource in the in-memory store.
