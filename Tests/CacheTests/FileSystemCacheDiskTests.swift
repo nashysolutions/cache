@@ -20,7 +20,7 @@ import Files
 /// These tests are deliberately layout-agnostic: they never name the folder or the file
 /// extension the cache uses. They assert only what a consumer can observe: which of *their* files
 /// survive, and whether the directory they nominated is still there.
-@Suite("FileSystemCache on-disk behaviour")
+@Suite("FileSystemCache on-disk behaviour", .dependency(\.date.now, pinnedNow))
 struct FileSystemCacheDiskTests {
 
     @Test("reset() leaves the base directory and a foreign file intact when no subfolder is configured")
@@ -261,7 +261,7 @@ struct FileSystemCacheDiskTests {
 /// ordinary and reports `nil`, and a lookup that could not be completed, which is a fault and
 /// throws. An entry whose stored payload no longer decodes sits with the first group: it can
 /// never be served, so it reports `nil` and is cleared rather than left on disk.
-@Suite("FileSystemCache misses and unservable entries")
+@Suite("FileSystemCache misses and unservable entries", .dependency(\.date.now, pinnedNow))
 struct FileSystemCacheMissTests {
 
     @Test("A read for an identifier that was never stashed reports nil")
@@ -381,7 +381,7 @@ struct FileSystemCacheMissTests {
 /// other's entry, and each then failed to decode what it found, which is the exact condition the
 /// self-healing delete acts on, so both entries were destroyed and both caches served nothing
 /// from then on, permanently and without an error.
-@Suite("FileSystemCache across item types")
+@Suite("FileSystemCache across item types", .dependency(\.date.now, pinnedNow))
 struct FileSystemCacheCrossTypeTests {
 
     @Test("Two item types with the same identifier keep separate entries")
@@ -459,7 +459,7 @@ struct FileSystemCacheCrossTypeTests {
 /// Each test stages the fault with POSIX permissions and asserts the staging took effect before
 /// asserting anything about the cache. Without that check, a suite running as a user who ignores
 /// the permission bits would report these as passing while exercising nothing.
-@Suite("FileSystemCache file system faults")
+@Suite("FileSystemCache file system faults", .dependency(\.date.now, pinnedNow))
 struct FileSystemCacheFaultTests {
 
     /// The directory a cache writes its entries into, found without naming the layout.
@@ -570,7 +570,7 @@ struct FileSystemCacheFaultTests {
 /// The observables are the count the sweep reports and which files survive it. Reading an expired
 /// identifier back proves nothing here, because a read reports `nil` for an expired entry whether
 /// or not the sweep removed it, so these tests count files rather than read them back.
-@Suite("FileSystemCache expired-entry sweep")
+@Suite("FileSystemCache expired-entry sweep", .dependency(\.date.now, pinnedNow))
 struct FileSystemCacheSweepTests {
 
     @Test("Expired entries are deleted, live entries are kept, and the count says how many went")
@@ -645,7 +645,7 @@ struct FileSystemCacheSweepTests {
         try await cache.stash(CodableTestValue(count: "1"), duration: .long)
 
         let entry = root.appending(path: try #require(regularFiles(under: root).first))
-        try undecodableRecordData(expiry: Date().addingTimeInterval(-3600)).write(to: entry)
+        try undecodableRecordData(expiry: pinnedNow.addingTimeInterval(-3600)).write(to: entry)
 
         #expect(try await cache.removeExpired() == 1)
         #expect(FileManager.default.fileExists(atPath: entry.path) == false)
@@ -661,7 +661,7 @@ struct FileSystemCacheSweepTests {
         try await cache.stash(CodableTestValue(count: "1"), duration: .long)
 
         let entry = root.appending(path: try #require(regularFiles(under: root).first))
-        try undecodableRecordData(expiry: Date().addingTimeInterval(3600)).write(to: entry)
+        try undecodableRecordData(expiry: pinnedNow.addingTimeInterval(3600)).write(to: entry)
 
         #expect(try await cache.removeExpired() == 0)
         #expect(FileManager.default.fileExists(atPath: entry.path))
@@ -700,7 +700,7 @@ struct FileSystemCacheSweepTests {
         let writeDirectory = root.appending(path: entry).deletingLastPathComponent()
 
         let neighbour = writeDirectory.appending(component: "unrelated-neighbour.json")
-        let neighbourBody = undecodableRecordData(expiry: Date().addingTimeInterval(-3600))
+        let neighbourBody = undecodableRecordData(expiry: pinnedNow.addingTimeInterval(-3600))
         try neighbourBody.write(to: neighbour)
 
         #expect(try await cache.removeExpired() == 1)
@@ -1047,10 +1047,10 @@ private func undecodableRecordData(expiry: Date) -> Data {
     Data(#"{"item":{"quantity":1},"expiry":\#(expiry.timeIntervalSinceReferenceDate)}"#.utf8)
 }
 
-/// An expiry that has already passed when it is stashed, so the entry is expired on the sweep that
-/// follows without anything having to wait.
+/// An expiry an hour before ``pinnedNow``, the instant every suite here pins the clock to, so the
+/// entry is expired on the sweep that follows without anything having to wait.
 private func expiredAnHourAgo() -> Expiry {
-    .custom(Date().addingTimeInterval(-3600))
+    .custom(pinnedNow.addingTimeInterval(-3600))
 }
 
 /// Every regular file beneath `root`, as paths relative to it. Directories are excluded, so an

@@ -35,20 +35,23 @@ extension Database {
         try storage.insert(resource)
     }
 
-    /// Retrieves a resource for the given identifier, if available and not expired.
+    /// Retrieves a resource for the given identifier, if available and not expired at the given
+    /// instant.
     ///
     /// If the resource exists but is expired, it is automatically removed and `nil` is returned.
     ///
-    /// - Parameter identifier: The identifier of the resource to fetch.
+    /// - Parameters:
+    ///   - identifier: The identifier of the resource to fetch.
+    ///   - now: The instant to judge expiry against, which the cache read from its clock.
     /// - Returns: A valid resource if found and not expired, or `nil` otherwise.
     /// - Throws: An error if the storage operation fails.
-    func resource(for identifier: Store.Item.ID) throws -> Store.Resource? {
+    func resource(for identifier: Store.Item.ID, asOf now: Date) throws -> Store.Resource? {
 
         guard let resource = try storage.resource(for: identifier) else {
             return nil
         }
 
-        if resource.isExpired {
+        if resource.isExpired(asOf: now) {
             try storage.remove(for: identifier)
             return nil
         }
@@ -74,16 +77,17 @@ extension Database {
         try storage.removeAll()
     }
 
-    /// Removes every resource that has expired, and reports how many were removed.
+    /// Removes every resource that had expired at the given instant, and reports how many were
+    /// removed.
     ///
-    /// The instant every resource is judged against is taken here, once, and handed to storage,
-    /// so a sweep over many resources reads the clock once rather than once per resource. This is
-    /// also the only place a sweep resolves the current time, which is where an injected clock
-    /// would go.
+    /// The instant is read once, by the cache, and handed through to storage, so a sweep over
+    /// many resources judges every one against the same moment rather than reading a clock per
+    /// resource.
     ///
+    /// - Parameter now: The instant to judge expiry against, which the cache read from its clock.
     /// - Returns: The number of resources removed.
     /// - Throws: An error if the storage could not be enumerated or a resource could not be removed.
-    func removeExpired() throws -> Int {
-        try storage.removeExpired(asOf: Date())
+    func removeExpired(asOf now: Date) throws -> Int {
+        try storage.removeExpired(asOf: now)
     }
 }

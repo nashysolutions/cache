@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Dependencies
 
 /// A lightweight, in-memory cache implementation.
 ///
@@ -17,11 +18,17 @@ import Foundation
 /// looked up, or when ``removeExpired()`` is called. Until then, an entry that is never looked up
 /// again stays in memory for as long as the cache lives.
 ///
+/// The current time comes from `@Dependency(\.date)`, read when an item is stashed, looked up or
+/// swept, so a test sets it with `withDependencies` rather than waiting. See <doc:QuickStart>.
+///
 /// - Note: This cache is entirely in-memory and will not retain data between app sessions.
 public struct VolatileCache<Item: Identifiable & Sendable>: DatabaseBackedCache where Item.ID: Sendable {
 
     /// The backing volatile database used for storage.
     let database: VolatileDatabase<Item>
+
+    /// The only source of the current time, for setting an expiry and for judging one.
+    @Dependency(\.date) var date
 
     /// Creates a new volatile cache instance.
     ///
@@ -41,7 +48,7 @@ public struct VolatileCache<Item: Identifiable & Sendable>: DatabaseBackedCache 
     ///   - duration: The expiry policy to use.
     /// - Throws: An error if the item could not be inserted.
     public func stash(_ item: Item, duration: Expiry) async throws {
-        let resource = Entry<Item>(item: item, expiry: duration.date())
+        let resource = Entry<Item>(item: item, expiry: duration.date(using: date.now))
         try await database.stash(resource)
     }
 
@@ -59,7 +66,7 @@ public struct VolatileCache<Item: Identifiable & Sendable>: DatabaseBackedCache 
     /// - Returns: The cached item, or `nil` if it does not exist or is expired.
     /// - Throws: An error if the lookup fails.
     public func resource(for identifier: Item.ID) async throws -> Item? {
-        try await database.resource(for: identifier)?.item
+        try await database.resource(for: identifier, asOf: date.now)?.item
     }
 
     /// Clears all items from the cache.
@@ -75,6 +82,6 @@ public struct VolatileCache<Item: Identifiable & Sendable>: DatabaseBackedCache 
     /// - Throws: An error if the removal fails.
     @discardableResult
     public func removeExpired() async throws -> Int {
-        try await database.removeExpired()
+        try await database.removeExpired(asOf: date.now)
     }
 }

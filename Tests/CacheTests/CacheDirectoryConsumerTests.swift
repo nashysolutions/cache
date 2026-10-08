@@ -7,10 +7,12 @@
 
 import Testing
 import Foundation
+import Dependencies
+import DependenciesTestSupport
 
 import Cache
 
-/// Pins that a ``FileSystemCache`` can be constructed with nothing imported but `Cache`.
+/// Pins that a ``FileSystemCache`` can be constructed without importing `Files`.
 ///
 /// Until ``CacheDirectory`` existed, the initialiser took a `FileSystemDirectory`, a type declared
 /// in the `Files` package, so an adopter had to import `Files`, and name it in their own manifest,
@@ -18,6 +20,9 @@ import Cache
 /// `Files` nor anything else that declares or re-exports `FileSystemDirectory`, and it is not
 /// `@testable`, so it sees exactly what an adopter sees. Were the initialiser to take a `Files`
 /// type again, this file would stop building.
+///
+/// Besides `Cache`, it imports only `Dependencies` and `DependenciesTestSupport`, to pin `\.date`
+/// as an adopter's own test must. Neither declares or re-exports `FileSystemDirectory`.
 ///
 /// The leading-dot form is also what a 6.0.0 adopter wrote. `Files` is still loaded here, through
 /// `Cache`, and without member import visibility (SE-0444) a loaded module's members are visible
@@ -31,7 +36,7 @@ import Cache
 /// `foundation-dependencies`' test value, which accepts a write and keeps nothing. The tests
 /// therefore show that construction and every operation run, not where an entry lands.
 /// `CacheDirectoryTests` pins where it lands.
-@Suite("CacheDirectory with nothing imported but Cache")
+@Suite("CacheDirectory without importing Files", .dependency(\.date.now, pinnedNow))
 struct CacheDirectoryConsumerTests {
 
     @Test("A cache is constructed and used with every CacheDirectory case")

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Dependencies
 import Files
 
 /// A persistent, file system–backed cache for identifiable and codable items.
@@ -14,6 +15,9 @@ import Files
 /// disk. It is suitable for use cases where data must be retained across app launches.
 ///
 /// Each item is written with its expiry as one JSON file, which is why `Item` must be `Codable`.
+///
+/// The current time comes from `@Dependency(\.date)`, read when an item is stashed, looked up or
+/// swept, so a test sets it with `withDependencies` rather than waiting. See <doc:QuickStart>.
 ///
 /// Entries are written into a folder below the directory you nominate, scoped to both the layout
 /// version and `Item`, and never directly into the directory itself. The cache therefore only
@@ -44,6 +48,9 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
 
     /// The backing file system–based database.
     let database: FileSystemDatabase<Item>
+
+    /// The only source of the current time, for setting an expiry and for judging one.
+    @Dependency(\.date) var date
 
     /// Creates a new file system–backed cache.
     ///
@@ -114,7 +121,7 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
     ///   - duration: The expiry policy to apply.
     /// - Throws: An error if the item could not be saved to disk.
     public func stash(_ item: Item, duration: Expiry) async throws {
-        let resource = CodableEntry(item: item, expiry: duration.date())
+        let resource = CodableEntry(item: item, expiry: duration.date(using: date.now))
         try await database.stash(resource)
     }
 
@@ -147,7 +154,7 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
     ///   be decoded.
     /// - Throws: An error if the lookup could not be completed.
     public func resource(for identifier: Item.ID) async throws -> Item? {
-        try await database.resource(for: identifier)?.item
+        try await database.resource(for: identifier, asOf: date.now)?.item
     }
 
     /// Clears all cached items from the underlying storage.
@@ -176,6 +183,6 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
     ///   removed; the sweep is not transactional.
     @discardableResult
     public func removeExpired() async throws -> Int {
-        try await database.removeExpired()
+        try await database.removeExpired(asOf: date.now)
     }
 }

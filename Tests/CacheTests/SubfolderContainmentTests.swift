@@ -24,7 +24,7 @@ import Files
 /// The sandbox is not resolved, so on macOS it is spelled under `/var`, which is a link to
 /// `/private/var`. A check that compared a resolved path with an unresolved one would refuse every
 /// subfolder here, which the accepted cases below would catch.
-@Suite("FileSystemCache subfolder containment")
+@Suite("FileSystemCache subfolder containment", .dependency(\.date.now, pinnedNow))
 struct SubfolderContainmentTests {
 
     @Test(

@@ -7,6 +7,8 @@
 
 import Testing
 import Foundation
+import Dependencies
+import DependenciesTestSupport
 import Files
 
 import Cache
@@ -115,7 +117,7 @@ struct DeprecatedAPITests {
 
     /// The default is reached only by a conformance that has no sweep. Both caches in the package
     /// have one, and generic code over `Cache` must reach it, not the default.
-    @Test("Generic code sweeping a package cache reaches its own sweep, not the default")
+    @Test("Generic code sweeping a package cache reaches its own sweep, not the default", .dependency(\.date.now, pinnedNow))
     func packageCacheDoesNotUseTheDefault() async throws {
 
         let cache = VolatileCache<TestValue>()
@@ -128,7 +130,7 @@ struct DeprecatedAPITests {
     /// leading-dot call resolves to the `CacheDirectory` one. So the value is held in a variable
     /// here, as 6.0.0 code that chose its directory at run time held it. Where a cache built this
     /// way writes is pinned by `CacheDirectoryTests`.
-    @Test("A FileSystemCache is built from a FileSystemDirectory value the way 6.0.0 code did")
+    @Test("A FileSystemCache is built from a FileSystemDirectory value the way 6.0.0 code did", .dependency(\.date.now, pinnedNow))
     func fileSystemCacheIsBuiltFromAFileSystemDirectory() async throws {
 
         let directory: FileSystemDirectory = .caches

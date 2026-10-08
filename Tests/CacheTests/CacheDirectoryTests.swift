@@ -8,6 +8,7 @@
 import Testing
 import Foundation
 import Dependencies
+import DependenciesTestSupport
 import FoundationDependencies
 import Files
 
@@ -32,7 +33,7 @@ import Cache
 /// The build reports one deprecation warning for this file, for the deprecated initialiser this
 /// suite compares against. It goes with that initialiser in 8.0.0, and the comparison with it goes
 /// too, leaving the check against ``expectedDirectory(for:)``.
-@Suite("CacheDirectory resolves where FileSystemDirectory did")
+@Suite("CacheDirectory resolves where FileSystemDirectory did", .dependency(\.date.now, pinnedNow))
 struct CacheDirectoryTests {
 
     /// The `FileSystemDirectory` an adopter passed to the deprecated initialiser to mean the same
