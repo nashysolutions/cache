@@ -17,7 +17,8 @@ An entry is written to:
 ```
 
 - `<base>` is the directory named by the `FileSystemDirectory` you pass to the initialiser.
-- `<subfolder>` is the optional subfolder you pass, and is omitted when it is `nil`.
+- `<subfolder>` is the optional subfolder you pass, and is omitted when it is `nil`. It may be
+  nested, and it must stay inside `<base>`, as the next section describes.
 - `cache-v2` is chosen by this package and identifies the layout version.
 - `<type>` is the lowercase hexadecimal SHA-256 digest of `Item`'s fully qualified name, and is
   what keeps two caches over different item types from reaching each other.
@@ -40,6 +41,52 @@ with exactly two keys:
 `expiry` uses `JSONEncoder`'s default date strategy, so it is a number of seconds since the
 reference date of 1 January 2001, not a Unix timestamp. If you read these files with other
 tooling, decode dates accordingly.
+
+## Where a subfolder may lead
+
+Apart from `<base>` itself, which every operation creates if it is missing, everything the cache
+creates, writes and deletes is inside `<base>`. A subfolder is joined to `<base>` as written, so
+without a check `"../Documents"` would put the cache in the directory beside it. Every operation
+therefore checks the folder it is about to use, before creating anything below `<base>`, and
+refuses one that resolves outside `<base>` by throwing `CocoaError.fileWriteInvalidFileName`. The
+error's `url` is the folder's location, as joined before anything is resolved. Nothing is created
+or written below `<base>` when that happens, and the cache itself is unaffected: the initialiser
+still cannot fail, and the next operation checks again.
+
+The folder is refused when:
+
+- the subfolder has a `..` component, wherever it would lead;
+- the folder is not inside `<base>` once every symbolic link in either is followed;
+- the folder passes through a symbolic link that cannot be followed, because its target is missing
+  or it loops.
+
+The check covers the whole folder, including the `cache-v2` and `<type>` components, so a link in
+place of either is caught too.
+
+These are accepted:
+
+| Subfolder | Folder |
+| --- | --- |
+| `nil`, `""` or `"."` | `<base>/cache-v2/<type>` |
+| `"a"` | `<base>/a/cache-v2/<type>` |
+| `"a/b"` | `<base>/a/b/cache-v2/<type>` |
+| `"/a"` | `<base>/a/cache-v2/<type>`, because a leading `/` is a separator, not the root |
+| a link inside `<base>` to a folder inside `<base>` | wherever the link leads |
+
+`..` is refused even where it would stay inside, as in `"a/../b"`. After a symbolic link, `..`
+climbs from the link's target rather than from the link, so `"link/../x"` lands beside wherever
+`link` points, while resolving the same text without the file system places it at `<base>/x`.
+Refusing the component outright is what keeps the check exact.
+
+The check is made by each operation rather than once, because a link that is not there when a
+cache is created can be there by the time it is used. It is still a check made before the
+operation rather than a lock held during it, so a link created inside `<base>` between the two is
+not seen. Creating one needs write access to `<base>`, which is already enough to replace anything
+the cache keeps there.
+
+Following links needs the real file system. If you supply your own `fileSystemResourceClient`
+whose locations are not on the real file system, nothing resolves, and the folder and `<base>` are
+compared as written.
 
 ## What `reset()` deletes
 

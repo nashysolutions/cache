@@ -34,6 +34,11 @@ import Files
 /// being usable afterwards, so a check at construction would be a guarantee this package could
 /// not keep.
 ///
+/// The same holds for a subfolder that leads outside the directory you nominate. Every operation
+/// checks the folder it is about to use before creating anything below that directory, and
+/// refuses one that resolves outside it by throwing `CocoaError.fileWriteInvalidFileName`, so the
+/// cache never writes outside it. See ``init(_:subfolder:)`` for what a subfolder may contain.
+///
 /// - Important: On a non-sandboxed macOS process, `.documents` is the user's real `~/Documents`.
 ///   A cache nominating it will create a folder there on first use. Before this package shipped a
 ///   live file system client, that write silently went nowhere, so an app that nominated
@@ -56,9 +61,31 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
     /// `description` that includes a memory address, or anything else that varies, still compiles,
     /// and the cache then fails to find what it wrote.
     ///
+    /// ## Subfolder
+    ///
+    /// A subfolder is a path below `fileSystemDirectory`, and may be nested, such as
+    /// `"Cheeses/Soft"`. It must stay inside that directory, and every operation refuses one that
+    /// does not by throwing `CocoaError.fileWriteInvalidFileName`, carrying the folder's location
+    /// in the error's `url`. Nothing is created or written below `fileSystemDirectory` when that
+    /// happens. The directory itself is still created if it is missing, because every operation
+    /// resolves it first in order to check the subfolder against it. A subfolder is refused when:
+    ///
+    /// - it has a `..` component, such as `"../Documents"` or `"a/../b"`, wherever it would lead;
+    /// - it passes through a symbolic link that leads outside the directory, or one that cannot be
+    ///   followed.
+    ///
+    /// A symbolic link that stays inside the directory is followed. A leading `/` does not make
+    /// the subfolder absolute: `"/Cheeses"` is the same folder as `"Cheeses"`. An empty string and
+    /// `"."` both name the directory itself, like `nil`.
+    ///
+    /// Check a subfolder derived from anything you do not fully control, such as user input or a
+    /// name supplied by a server, before passing it here. The rule above stops it escaping the
+    /// directory; it does not stop it naming a different folder inside it.
+    ///
     /// - Parameters:
     ///   - fileSystemDirectory: The root directory in which resources will be stored.
-    ///   - subfolder: An optional subfolder name used to scope the cache contents. Defaults to `nil`.
+    ///   - subfolder: An optional path below `fileSystemDirectory` used to scope the cache
+    ///     contents. Defaults to `nil`.
     public init(
         _ fileSystemDirectory: FileSystemDirectory,
         subfolder: String? = nil
