@@ -42,6 +42,12 @@ with exactly two keys:
 reference date of 1 January 2001, not a Unix timestamp. If you read these files with other
 tooling, decode dates accordingly.
 
+An entry is written atomically. Its bytes go to a temporary file in the same folder, which is
+then renamed over the entry's filename, so a read never finds a partly written entry under that
+name. If the process ends during a write, the temporary file can be left in the folder. Its name is
+not an entry's name, so it is never read as an entry, and `reset()` and `removeExpired()` leave it
+where it is.
+
 ## Where a subfolder may lead
 
 Apart from `<base>` itself, which every operation creates if it is missing, everything the cache
@@ -88,6 +94,26 @@ Following links needs the real file system. If you supply your own `fileSystemRe
 whose locations are not on the real file system, nothing resolves, and the folder and `<base>` are
 compared as written.
 
+## A link at an entry's filename
+
+The check above covers the folder, not each entry inside it. If a symbolic link sits at an entry's
+own filename, no operation follows it:
+
+- `stash` replaces the link with the entry, and writes nothing where the link points.
+- Reading the identifier reports `nil` and deletes the link, as it does for an entry that does not
+  decode. What the link points to is not read.
+- `removeResource(for:)` deletes the link, not what it points to.
+- `reset()` and `removeExpired()` delete only regular files, so they leave the link in place.
+
+The write needs no check to do this, because renaming a file over a link replaces the link rather
+than following it. The read does need one, and like the folder check it is made before the read
+rather than held during it, so a link created between the two is followed. Creating one needs
+write access to the folder, which is already enough to replace the entry itself.
+
+If you supply your own `fileSystemResourceClient`, its context is asked to write each entry with
+the `.atomic` option, and the write replaces a link only if the context honours it. The read's
+check asks the real file system, so for locations that are not on it, nothing is a link.
+
 ## What `reset()` deletes
 
 `reset()` deletes files inside this cache's own `<type>` folder whose names are a lowercase
@@ -128,9 +154,9 @@ wrote it. Shipping an app update that renames a property, or adds a non-optional
 entry written by the previous version undecodable.
 
 Such an entry is treated as a miss: reading its identifier reports `nil`, and the entry is deleted
-on that read. An empty entry, which is what a truncated write leaves behind, is treated the same
-way. Nothing is reported to the caller, because there is nothing a caller can do with a payload
-that will never decode again, and leaving it in place would strand it on disk indefinitely.
+on that read. An empty entry is treated the same way. Nothing is reported to the caller, because
+there is nothing a caller can do with a payload that will never decode again, and leaving it in
+place would strand it on disk indefinitely.
 
 Deleting one of these is safe in a way that deleting an entry from an earlier layout is not,
 which is why the section below reaches the opposite conclusion about those. The proof this delete

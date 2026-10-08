@@ -114,6 +114,13 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
 
     /// Inserts a resource into the file system.
     ///
+    /// The entry is written atomically: to a temporary file beside it, which is then renamed over
+    /// the entry's filename. A plain write opens whatever is already at that filename and follows
+    /// it, so a symbolic link placed there redirected the write to wherever the link pointed,
+    /// outside the base directory included. A rename replaces the link instead, and the entry
+    /// lands where its filename says. ``FileSystemContainment`` describes how the other operations
+    /// treat such a link.
+    ///
     /// - Parameter resource: The resource to insert.
     /// - Throws: An error if the resource could not be encoded or written to disk.
     func insert(_ resource: Resource) throws {
@@ -123,7 +130,7 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
 
         try store.folder
             .resource(filename: filename(for: resource))
-            .write(data: data, using: store.agent)
+            .write(data: data, using: store.agent, options: .atomic)
     }
 
     /// Removes the entry held for the given identifier, if there is one.
@@ -136,6 +143,8 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
     /// absent entry from one it is not permitted to look for, so guarding on it reported a
     /// permissions fault as an ordinary "nothing to remove". Attempting the delete and reading
     /// the failure keeps the two apart: see ``reportsNothingThere(_:)``.
+    ///
+    /// A symbolic link at the entry's filename is deleted itself, not what it points to.
     ///
     /// - Parameter identifier: The identifier of the item whose entry should be removed.
     /// - Throws: An error if an entry could not be deleted for any reason other than not being
@@ -248,14 +257,21 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
     ///   payload stops decoding when the item's `Codable` shape changes, which an app update
     ///   routinely does. Such an entry can never be served again, so there is nothing to protect
     ///   by keeping it, and leaving it would strand it on the consumer's disk for good. An entry
-    ///   that is empty, which is what a truncated write leaves behind, fails to decode and is
-    ///   treated the same way.
+    ///   that is empty, which an interrupted write leaves behind when the file system context does
+    ///   not honour the atomic write ``insert(_:)`` asks for, fails to decode and is treated the
+    ///   same way.
     ///
     ///   This is the step that needs the type scoping in ``FileSystemLayout``. "Does not decode"
     ///   is also exactly what a different item type's entry looks like, so before entries were
     ///   scoped by type, two caches sharing a directory deleted each other's data here.
     /// - **A failure to read an entry that is present.** Throws. A permissions or I/O fault is a
     ///   real fault, and reporting it as an ordinary cache miss would hide it.
+    ///
+    /// A symbolic link at the entry's filename is treated like an entry that does not decode,
+    /// without being read. This package writes only regular files there, so a link is never an
+    /// entry, and following it would serve whatever it points to, outside the base directory
+    /// included. It reports `nil` and the link is deleted; what it points to is neither read nor
+    /// touched.
     ///
     /// The read is attempted rather than guarded by an existence check, for the reason given on
     /// ``reportsNothingThere(_:)``: a directory that exists but cannot be searched answers an
@@ -268,11 +284,19 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
     /// - Parameter identifier: The identifier of the item.
     /// - Returns: The stored resource, or `nil` if there is none to serve.
     /// - Throws: An error if an entry could not be read for any reason other than not being
-    ///   there, or if an entry that does not decode could not be deleted.
+    ///   there, or if an entry that does not decode, or a link at its filename, could not be
+    ///   deleted.
     func resource(for identifier: Item.ID) throws -> StoredResource? {
 
         let store = try store
         let entry = store.folder.resource(filename: filename(for: identifier))
+
+        // The file system context can only read by following a link, so the link is looked for
+        // first. `FileSystemContainment` describes the window this leaves.
+        if FileSystemContainment.isSymbolicLink(entry.location.path) {
+            try store.agent.deleteLocation(at: entry.location)
+            return nil
+        }
 
         let data: Data
 
