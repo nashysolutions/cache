@@ -27,9 +27,9 @@ Instantiate your cache and use it.
 ```swift
 let cache = VolatileCache<Cheese>()
 
-try await cache.stash(Cheese(id: 1, name: "Brie"), duration: .long)
+try await cache.setItem(Cheese(id: 1, name: "Brie"), expiry: .long)
 
-let brie = try await cache.resource(for: 1)
+let brie = try await cache.item(for: 1)
 ```
 
 There is no step 2.
@@ -41,9 +41,9 @@ Instantiate your cache and use it.
 ```swift
 let cache = FileSystemCache<Cheese>(.caches, subfolder: "Cheeses")
 
-try await cache.stash(Cheese(id: 1, name: "Brie"), duration: .long)
+try await cache.setItem(Cheese(id: 1, name: "Brie"), expiry: .long)
 
-let brie = try await cache.resource(for: 1)
+let brie = try await cache.item(for: 1)
 ```
 
 There is no step 2 here either. `.caches` is a ``CacheDirectory``, which this package declares,
@@ -51,7 +51,7 @@ so `import Cache` is the only import this needs. Entries are written to the real
 no further setup, into a versioned folder below the directory you nominate. See
 <doc:OnDiskFormat> for the layout, and for what this package will and will not delete.
 
-A lookup for an identifier you have not stashed reports `nil` rather than throwing, and so does an
+A lookup for an identifier you have not set reports `nil` rather than throwing, and so does an
 entry whose stored payload no longer decodes. An error means the operation could not be completed:
 a cache directory that cannot be created or searched, an entry that cannot be read, or a subfolder
 that leads outside the directory you nominated, which every operation refuses. An
@@ -67,6 +67,19 @@ other's entries.
 
 > Important: on a non-sandboxed macOS process, `.documents` is the user's real `~/Documents`, and
 > a cache nominating it creates a folder there on first use.
+
+## Choosing an expiry
+
+Every item is set with an ``Expiry``. ``Expiry/short``, ``Expiry/medium`` and ``Expiry/long`` last
+one minute, three minutes and an hour from the moment the item is set. Any other length is a
+`Duration`:
+
+```swift
+try await cache.setItem(Cheese(id: 1, name: "Brie"), expiry: .after(.seconds(10 * 60)))
+```
+
+A fixed deadline is a `Date`, passed as `.at(date)`, and does not depend on when the item is set.
+Setting an item under an identifier the cache already holds replaces that entry, expiry included.
 
 ## Clearing expired entries
 
@@ -85,9 +98,9 @@ caches support it, and the result can be ignored.
 ## Controlling time
 
 Both caches read the current time from `@Dependency(\.date)`, which comes from
-[swift-dependencies](https://github.com/pointfreeco/swift-dependencies). A stash counts its
-``Expiry`` from that reading, and a lookup or a sweep judges the expiry against a fresh one. An
-entry is served up to and including the instant it expires, and not after it.
+[swift-dependencies](https://github.com/pointfreeco/swift-dependencies). Setting an item
+counts its ``Expiry`` from that reading, and a lookup or a sweep judges the expiry against a fresh
+one. An entry is served up to and including the instant it expires, and not after it.
 
 To set the time, override `\.date` with `withDependencies`. A cache constructed inside such a scope
 keeps that time for every later call made outside one, and a scope around a single call takes
@@ -98,33 +111,33 @@ import Cache
 import Dependencies
 import Foundation
 
-let stashedAt = Date(timeIntervalSince1970: 1_700_000_000)
+let storedAt = Date(timeIntervalSince1970: 1_700_000_000)
 
 let cache = withDependencies {
-    $0.date.now = stashedAt
+    $0.date.now = storedAt
 } operation: {
     VolatileCache<Cheese>()
 }
 
-try await cache.stash(Cheese(id: 1, name: "Brie"), duration: .long)
+try await cache.setItem(Cheese(id: 1, name: "Brie"), expiry: .long)
 
 let brie = try await withDependencies {
-    $0.date.now = stashedAt.addingTimeInterval(59 * 60)
+    $0.date.now = storedAt.addingTimeInterval(59 * 60)
 } operation: {
-    try await cache.resource(for: 1)
+    try await cache.item(for: 1)
 }
 
 let gone = try await withDependencies {
-    $0.date.now = stashedAt.addingTimeInterval(61 * 60)
+    $0.date.now = storedAt.addingTimeInterval(61 * 60)
 } operation: {
-    try await cache.resource(for: 1)
+    try await cache.item(for: 1)
 }
 ```
 
 `brie` is the cheese, 59 minutes into its hour, and `gone` is `nil`, a minute after the hour ran
 out. Nothing waits in between.
 
-In a test, override `\.date` for every cache that stashes, looks up or sweeps. `swift-dependencies`
+In a test, override `\.date` for every cache that sets, looks up or sweeps. `swift-dependencies`
 declares no test value for it, so a cache left on the default reads the real clock, and the read is
 recorded as a test failure saying that `@Dependency(\.date)` has no test implementation. A preview
 and a shipping app read the real clock, and record nothing.
@@ -155,9 +168,9 @@ the `operation` closure, not merely used there.
 
 ## In a test, and in a preview
 
-Neither a test run nor an Xcode preview reaches the real file system. In both, a `stash` succeeds,
-every lookup reports `nil` whatever you stashed first, no directory is created, and nothing warns
-you.
+Neither a test run nor an Xcode preview reaches the real file system. In both, setting an item
+succeeds, every lookup reports `nil` whatever you set first, no directory is created, and nothing
+warns you.
 
 The cause is the same in both cases. `swift-dependencies` resolves a *test* value inside a test
 and a *preview* value inside a preview, and for `fileSystemResourceClient` both are witnessed in
@@ -183,6 +196,27 @@ let cache = withDependencies {
 ```
 
 ## Upgrading
+
+7.0.0 renamed the four operations every cache shares, so that each name says what the call does:
+`stash(_:duration:)` is now ``Cache/setItem(_:expiry:)``, `resource(for:)` is ``Cache/item(for:)``,
+`removeResource(for:)` is ``Cache/removeItem(for:)``, and `reset()` is ``Cache/removeAll()``.
+``Expiry`` gained ``Expiry/after(_:)`` for a duration of any length, `custom(_:)` became
+``Expiry/at(_:)``, and `.short`, `.medium` and `.long` read the same at the call site as before.
+
+The old names still compile, each with a deprecation warning and a fix-it, until 8.0.0. So does a
+`Cache` conformance of your own that implements the old names, and it is warned which new name to
+implement. Two things stop compiling: a pattern such as `case .custom(let date)`, which matches
+`.at` instead, and a `switch` over ``Expiry`` that lists the four 6.0.0 cases, which covers
+`.after` and `.at` instead.
+
+Check a `Cache` conformance of your own for a method that already has the signature of a new
+name, such as a helper `func removeAll() async`. That method now implements the requirement. If
+it is less visible than the type, the conformance stops compiling. If it is not, it compiles with
+no warning, and a caller of the new name reaches that method instead of your implementation of the
+old name. Rename the method.
+
+If you declared ``Expiry`` `Equatable` or `Hashable` yourself, delete that conformance. ``Expiry``
+is now `Hashable`, and yours produces a warning.
 
 Earlier versions of this article asked you to write a `FileSystemContext` and two `@retroactive
 DependencyKey` conformances by hand. That is no longer needed, and the conformance for

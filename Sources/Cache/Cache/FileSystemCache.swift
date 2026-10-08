@@ -16,7 +16,7 @@ import Files
 ///
 /// Each item is written with its expiry as one JSON file, which is why `Item` must be `Codable`.
 ///
-/// The current time comes from `@Dependency(\.date)`, read when an item is stashed, looked up or
+/// The current time comes from `@Dependency(\.date)`, read when an item is set, looked up or
 /// swept, so a test sets it with `withDependencies` rather than waiting. See <doc:QuickStart>.
 ///
 /// Entries are written into a folder below the directory you nominate, scoped to both the layout
@@ -84,7 +84,7 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
     /// directory; it does not stop it naming a different folder inside it.
     ///
     /// - Parameters:
-    ///   - directory: The root directory in which resources will be stored.
+    ///   - directory: The root directory in which entries are stored.
     ///   - subfolder: An optional path below `directory` used to scope the cache contents.
     ///     Defaults to `nil`.
     public init(
@@ -112,16 +112,16 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
         )
     }
 
-    /// Stashes an item in the cache with a given expiry duration.
+    /// Stores an item in the cache under its identifier, with the given expiry.
     ///
-    /// If a resource with the same identifier already exists, it is replaced.
+    /// If an entry with the same identifier already exists, it is replaced.
     ///
     /// - Parameters:
     ///   - item: The item to cache.
-    ///   - duration: The expiry policy to apply.
+    ///   - expiry: When the entry stops being served.
     /// - Throws: An error if the item could not be saved to disk.
-    public func stash(_ item: Item, duration: Expiry) async throws {
-        let resource = CodableEntry(item: item, expiry: duration.date(using: date.now))
+    public func setItem(_ item: Item, expiry: Expiry) async throws {
+        let resource = CodableEntry(item: item, expiry: expiry.date(using: date.now))
         try await database.stash(resource)
     }
 
@@ -133,14 +133,14 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
     ///
     /// - Parameter identifier: The identifier of the item to remove.
     /// - Throws: An error if an entry is present and could not be deleted.
-    public func removeResource(for identifier: Item.ID) async throws {
+    public func removeItem(for identifier: Item.ID) async throws {
         try await database.removeResource(for: identifier)
     }
 
     /// Retrieves a cached item by its identifier, if it exists and is not expired.
     ///
     /// An identifier the cache holds nothing for reports `nil`, not an error, so a lookup before
-    /// anything has been stashed behaves like any other miss. An entry whose stored payload no
+    /// anything has been set behaves like any other miss. An entry whose stored payload no
     /// longer decodes, which is what an item's changed `Codable` shape leaves behind after an app
     /// update, also reports `nil`, and is deleted rather than left on disk unreadable.
     ///
@@ -153,7 +153,7 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
     /// - Returns: The cached item, or `nil` if it does not exist, is expired, or can no longer
     ///   be decoded.
     /// - Throws: An error if the lookup could not be completed.
-    public func resource(for identifier: Item.ID) async throws -> Item? {
+    public func item(for identifier: Item.ID) async throws -> Item? {
         try await database.resource(for: identifier, asOf: date.now)?.item
     }
 
@@ -164,7 +164,7 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
     /// different item type, are left untouched.
     ///
     /// - Throws: An error if the storage could not be cleared.
-    public func reset() async throws {
+    public func removeAll() async throws {
         try await database.removeAll()
     }
 

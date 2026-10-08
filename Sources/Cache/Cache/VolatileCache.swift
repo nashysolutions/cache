@@ -18,7 +18,7 @@ import Dependencies
 /// looked up, or when ``removeExpired()`` is called. Until then, an entry that is never looked up
 /// again stays in memory for as long as the cache lives.
 ///
-/// The current time comes from `@Dependency(\.date)`, read when an item is stashed, looked up or
+/// The current time comes from `@Dependency(\.date)`, read when an item is set, looked up or
 /// swept, so a test sets it with `withDependencies` rather than waiting. See <doc:QuickStart>.
 ///
 /// - Note: This cache is entirely in-memory and will not retain data between app sessions.
@@ -32,23 +32,23 @@ public struct VolatileCache<Item: Identifiable & Sendable>: DatabaseBackedCache 
 
     /// Creates a new volatile cache instance.
     ///
-    /// The cache starts empty and has no record limit: it holds every entry stashed in it until
-    /// that entry is removed.
+    /// The cache starts empty and has no record limit: it holds every entry set in it until that
+    /// entry is removed.
     public init() {
         database = VolatileDatabase<Item>()
     }
 
-    /// Stashes an item in the cache with a given expiry duration.
+    /// Stores an item in the cache under its identifier, with the given expiry.
     ///
-    /// Stashing never removes another entry. An item stashed under an identifier the cache already
-    /// holds replaces the entry for that identifier, expiry included.
+    /// Setting an item never removes another entry. An item set under an identifier the cache
+    /// already holds replaces the entry for that identifier, expiry included.
     ///
     /// - Parameters:
     ///   - item: The item to store in the cache.
-    ///   - duration: The expiry policy to use.
+    ///   - expiry: When the entry stops being served.
     /// - Throws: An error if the item could not be inserted.
-    public func stash(_ item: Item, duration: Expiry) async throws {
-        let resource = Entry<Item>(item: item, expiry: duration.date(using: date.now))
+    public func setItem(_ item: Item, expiry: Expiry) async throws {
+        let resource = Entry<Item>(item: item, expiry: expiry.date(using: date.now))
         try await database.stash(resource)
     }
 
@@ -56,7 +56,7 @@ public struct VolatileCache<Item: Identifiable & Sendable>: DatabaseBackedCache 
     ///
     /// - Parameter identifier: The identifier of the item to remove.
     /// - Throws: An error if removal fails.
-    public func removeResource(for identifier: Item.ID) async throws {
+    public func removeItem(for identifier: Item.ID) async throws {
         try await database.removeResource(for: identifier)
     }
 
@@ -65,14 +65,14 @@ public struct VolatileCache<Item: Identifiable & Sendable>: DatabaseBackedCache 
     /// - Parameter identifier: The identifier of the item.
     /// - Returns: The cached item, or `nil` if it does not exist or is expired.
     /// - Throws: An error if the lookup fails.
-    public func resource(for identifier: Item.ID) async throws -> Item? {
+    public func item(for identifier: Item.ID) async throws -> Item? {
         try await database.resource(for: identifier, asOf: date.now)?.item
     }
 
     /// Clears all items from the cache.
     ///
-    /// - Throws: An error if the reset operation fails.
-    public func reset() async throws {
+    /// - Throws: An error if the entries could not be removed.
+    public func removeAll() async throws {
         try await database.removeAll()
     }
 

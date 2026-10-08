@@ -133,9 +133,9 @@ struct SubfolderContainmentTests {
         let cache = sandbox.makeCache(subfolder: subfolder)
         let before = sandbox.itemsOutsideBase()
 
-        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+        try await cache.setItem(CodableTestValue(count: "1"), expiry: .long)
 
-        #expect(try await cache.resource(for: "1")?.count == "1")
+        #expect(try await cache.item(for: "1")?.count == "1")
         #expect(regularFiles(under: sandbox.base) == ["\(prefix)\(entryPath(for: "1"))"])
         #expect(sandbox.itemsOutsideBase() == before)
     }
@@ -153,9 +153,9 @@ struct SubfolderContainmentTests {
         let absolute = sandbox.outside.appending(component: "x").path
         let cache = sandbox.makeCache(subfolder: absolute)
 
-        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+        try await cache.setItem(CodableTestValue(count: "1"), expiry: .long)
 
-        #expect(try await cache.resource(for: "1")?.count == "1")
+        #expect(try await cache.item(for: "1")?.count == "1")
         #expect(regularFiles(under: sandbox.outside).isEmpty)
 
         let written = regularFiles(under: sandbox.base)
@@ -177,9 +177,9 @@ struct SubfolderContainmentTests {
 
         let cache = sandbox.makeCache(subfolder: "alias")
 
-        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+        try await cache.setItem(CodableTestValue(count: "1"), expiry: .long)
 
-        #expect(try await cache.resource(for: "1")?.count == "1")
+        #expect(try await cache.item(for: "1")?.count == "1")
         #expect(regularFiles(under: sandbox.base) == ["inner/\(entryPath(for: "1"))"])
     }
 }
@@ -193,8 +193,8 @@ struct SubfolderContainmentTests {
 @Suite("FileSystemCache entry filename links", .dependency(\.date.now, pinnedNow))
 struct EntryFilenameLinkTests {
 
-    @Test("A stash over a link at the entry's filename leaves the link's target unchanged, and writes the entry inside the base directory")
-    func stashOverOutwardLinkLeavesTheTargetUnchanged() async throws {
+    @Test("Setting an item over a link at the entry's filename leaves the link's target unchanged, and writes the entry inside the base directory")
+    func setItemOverOutwardLinkLeavesTheTargetUnchanged() async throws {
 
         let sandbox = try Sandbox()
         defer { sandbox.remove() }
@@ -207,19 +207,19 @@ struct EntryFilenameLinkTests {
         let cache = sandbox.makeCache(subfolder: nil)
         let before = sandbox.itemsOutsideBase()
 
-        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+        try await cache.setItem(CodableTestValue(count: "1"), expiry: .long)
 
         #expect(try Data(contentsOf: target) == original)
         #expect(sandbox.itemsOutsideBase() == before)
         #expect(isSymbolicLink(entry) == false)
         #expect(regularFiles(under: sandbox.base) == [entryPath(for: "1")])
-        #expect(try await cache.resource(for: "1")?.count == "1")
+        #expect(try await cache.item(for: "1")?.count == "1")
     }
 
     /// A write that follows a link creates the target when it is missing, so a link to a path
     /// that does not exist yet is the way to plant a new file outside, rather than change one.
-    @Test("A stash over a link to a missing file creates nothing outside the base directory")
-    func stashOverDanglingLinkCreatesNothingOutside() async throws {
+    @Test("Setting an item over a link to a missing file creates nothing outside the base directory")
+    func setItemOverDanglingLinkCreatesNothingOutside() async throws {
 
         let sandbox = try Sandbox()
         defer { sandbox.remove() }
@@ -228,7 +228,7 @@ struct EntryFilenameLinkTests {
         let entry = try sandbox.linkEntry(for: "1", to: target)
         let cache = sandbox.makeCache(subfolder: nil)
 
-        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+        try await cache.setItem(CodableTestValue(count: "1"), expiry: .long)
 
         // Listed directly rather than through `itemsOutsideBase()`, whose enumeration reports a
         // link that cannot be followed under a different spelling of the sandbox's path.
@@ -247,7 +247,7 @@ struct EntryFilenameLinkTests {
         defer { sandbox.remove() }
 
         let cache = sandbox.makeCache(subfolder: nil)
-        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+        try await cache.setItem(CodableTestValue(count: "1"), expiry: .long)
 
         let entry = sandbox.base.appending(path: entryPath(for: "1"))
         let target = sandbox.outside.appending(component: "target")
@@ -255,7 +255,7 @@ struct EntryFilenameLinkTests {
         let original = try Data(contentsOf: target)
         try FileManager.default.createSymbolicLink(at: entry, withDestinationURL: target)
 
-        #expect(try await cache.resource(for: "1") == nil)
+        #expect(try await cache.item(for: "1") == nil)
         #expect(isSymbolicLink(entry) == false)
         #expect(try Data(contentsOf: target) == original)
         #expect(regularFiles(under: sandbox.outside) == ["target"])
@@ -275,7 +275,7 @@ struct EntryFilenameLinkTests {
         let cache = sandbox.makeCache(subfolder: nil)
         let before = sandbox.itemsOutsideBase()
 
-        try await cache.removeResource(for: "1")
+        try await cache.removeItem(for: "1")
 
         #expect(isSymbolicLink(entry) == false)
         #expect(try Data(contentsOf: target) == original)
@@ -301,10 +301,10 @@ private func expectRefused(
     let before = sandbox.allItems()
 
     let operations: [(String, () async throws -> Void)] = [
-        ("stash", { try await cache.stash(CodableTestValue(count: "1"), duration: .long) }),
-        ("resource(for:)", { _ = try await cache.resource(for: "1") }),
-        ("removeResource(for:)", { try await cache.removeResource(for: "1") }),
-        ("reset()", { try await cache.reset() }),
+        ("setItem(_:expiry:)", { try await cache.setItem(CodableTestValue(count: "1"), expiry: .long) }),
+        ("item(for:)", { _ = try await cache.item(for: "1") }),
+        ("removeItem(for:)", { try await cache.removeItem(for: "1") }),
+        ("removeAll()", { try await cache.removeAll() }),
         ("removeExpired()", { try await cache.removeExpired() })
     ]
 

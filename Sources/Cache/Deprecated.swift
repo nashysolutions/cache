@@ -20,7 +20,7 @@ import Files
 ///
 /// Equality and hashing use the wrapped item's identifier alone, not the item or the expiry, as
 /// they did in 6.0.0. Two resources wrapping different items with the same identifier are equal.
-@available(*, deprecated, message: "Nothing in Cache accepts or returns Resource. Pass the item to stash(_:duration:) directly, or declare your own type to pair an item with an expiry date. Resource is removed in 8.0.0.")
+@available(*, deprecated, message: "Nothing in Cache accepts or returns Resource. Pass the item to setItem(_:expiry:) directly, or declare your own type to pair an item with an expiry date. Resource is removed in 8.0.0.")
 public struct Resource<Item: Identifiable & Sendable>: Sendable, Hashable {
 
     /// The wrapped item associated with this resource.
@@ -68,7 +68,7 @@ public struct Resource<Item: Identifiable & Sendable>: Sendable, Hashable {
 ///
 /// Equality and hashing use the wrapped item's identifier alone, not the item or the expiry, as
 /// they did in 6.0.0. Two resources wrapping different items with the same identifier are equal.
-@available(*, deprecated, message: "Nothing in Cache accepts or returns CodableResource. Pass the item to stash(_:duration:) directly, or declare your own type to pair an item with an expiry date. CodableResource is removed in 8.0.0.")
+@available(*, deprecated, message: "Nothing in Cache accepts or returns CodableResource. Pass the item to setItem(_:expiry:) directly, or declare your own type to pair an item with an expiry date. CodableResource is removed in 8.0.0.")
 public struct CodableResource<Item: Identifiable & Codable & Sendable>: Sendable, Codable, Hashable {
 
     /// The wrapped codable item associated with this resource.
@@ -134,6 +134,161 @@ extension Cache {
                 NSDebugDescriptionErrorKey: "\(Self.self) does not implement removeExpired(), so no expired entries were removed."
             ]
         )
+    }
+}
+
+// The operations 7.0.0 renamed. Every name, old and new, is a requirement of `Cache`, and
+// each has a default here that calls its counterpart: an old name calls its new name, and a new
+// name calls its old one. So a caller of either name reaches a conformance that implements
+// either, which keeps 6.0.0 callers, 6.0.0 conformances and test doubles compiling, with a
+// warning that names the change. The old requirements themselves are declared, deprecated, in
+// Cache.swift, and go with these defaults in 8.0.0.
+
+extension Cache {
+
+    /// Calls ``setItem(_:expiry:)``.
+    ///
+    /// `stash(_:duration:)` is the 6.0.0 name of ``setItem(_:expiry:)``. This default is what a
+    /// caller of the old name reaches on a conformance that implements the new one, which
+    /// includes ``VolatileCache`` and ``FileSystemCache``.
+    ///
+    /// - Parameters:
+    ///   - item: The item to be stored in the cache.
+    ///   - duration: When the entry stops being served.
+    /// - Throws: Whatever ``setItem(_:expiry:)`` throws.
+    @available(*, deprecated, renamed: "setItem(_:expiry:)", message: "Use setItem(_:expiry:). stash(_:duration:) is removed in 8.0.0.")
+    public func stash(_ item: Item, duration: Expiry) async throws {
+        try await setItem(item, expiry: duration)
+    }
+
+    /// Calls ``removeItem(for:)``.
+    ///
+    /// `removeResource(for:)` is the 6.0.0 name of ``removeItem(for:)``. This default is what a
+    /// caller of the old name reaches on a conformance that implements the new one, which
+    /// includes ``VolatileCache`` and ``FileSystemCache``.
+    ///
+    /// - Parameter identifier: The identifier of the item to remove.
+    /// - Throws: Whatever ``removeItem(for:)`` throws.
+    @available(*, deprecated, renamed: "removeItem(for:)", message: "Use removeItem(for:). removeResource(for:) is removed in 8.0.0.")
+    public func removeResource(for identifier: Item.ID) async throws {
+        try await removeItem(for: identifier)
+    }
+
+    /// Calls ``item(for:)``.
+    ///
+    /// `resource(for:)` is the 6.0.0 name of ``item(for:)``. This default is what a caller of the
+    /// old name reaches on a conformance that implements the new one, which includes
+    /// ``VolatileCache`` and ``FileSystemCache``.
+    ///
+    /// - Parameter identifier: The identifier of the item to retrieve.
+    /// - Returns: Whatever ``item(for:)`` returns.
+    /// - Throws: Whatever ``item(for:)`` throws.
+    @available(*, deprecated, renamed: "item(for:)", message: "Use item(for:). resource(for:) is removed in 8.0.0.")
+    public func resource(for identifier: Item.ID) async throws -> Item? {
+        try await item(for: identifier)
+    }
+
+    /// Calls ``removeAll()``.
+    ///
+    /// `reset()` is the 6.0.0 name of ``removeAll()``. This default is what a caller of the old
+    /// name reaches on a conformance that implements the new one, which includes
+    /// ``VolatileCache`` and ``FileSystemCache``.
+    ///
+    /// - Throws: Whatever ``removeAll()`` throws.
+    @available(*, deprecated, renamed: "removeAll()", message: "Use removeAll(). reset() is removed in 8.0.0.")
+    public func reset() async throws {
+        try await removeAll()
+    }
+
+    /// Calls `stash(_:duration:)`, for a conformance written against 6.0.0.
+    ///
+    /// Such a conformance implements `stash(_:duration:)` and not this method. This default lets
+    /// it compile, and lets a caller of the new name reach its implementation. It is deprecated,
+    /// so the conformance gets a warning at compile time that names the method to implement.
+    ///
+    /// - Warning: A conformance that implements neither this method nor `stash(_:duration:)`
+    ///   also compiles with only that warning, and then each default calls the other, so the
+    ///   first call never returns. It does not crash: an async call keeps its frames on the heap,
+    ///   not the thread's stack, so memory grows until the system terminates the process.
+    ///
+    /// - Parameters:
+    ///   - item: The item to be stored in the cache.
+    ///   - expiry: When the entry stops being served.
+    /// - Throws: Whatever the conformance's `stash(_:duration:)` throws.
+    @available(*, deprecated, message: "This conformance implements stash(_:duration:), the 6.0.0 name, and not setItem(_:expiry:). Its author should implement setItem(_:expiry:). If it implements neither, a call never returns. This default is removed in 8.0.0.")
+    public func setItem(_ item: Item, expiry: Expiry) async throws {
+        try await stash(item, duration: expiry)
+    }
+
+    /// Calls `removeResource(for:)`, for a conformance written against 6.0.0.
+    ///
+    /// Such a conformance implements `removeResource(for:)` and not this method. This default lets
+    /// it compile, and lets a caller of the new name reach its implementation. It is deprecated,
+    /// so the conformance gets a warning at compile time that names the method to implement.
+    ///
+    /// - Warning: A conformance that implements neither this method nor `removeResource(for:)`
+    ///   also compiles with only that warning, and then each default calls the other, so the
+    ///   first call never returns. It does not crash: an async call keeps its frames on the heap,
+    ///   not the thread's stack, so memory grows until the system terminates the process.
+    ///
+    /// - Parameter identifier: The identifier of the item to remove.
+    /// - Throws: Whatever the conformance's `removeResource(for:)` throws.
+    @available(*, deprecated, message: "This conformance implements removeResource(for:), the 6.0.0 name, and not removeItem(for:). Its author should implement removeItem(for:). If it implements neither, a call never returns. This default is removed in 8.0.0.")
+    public func removeItem(for identifier: Item.ID) async throws {
+        try await removeResource(for: identifier)
+    }
+
+    /// Calls `resource(for:)`, for a conformance written against 6.0.0.
+    ///
+    /// Such a conformance implements `resource(for:)` and not this method. This default lets it
+    /// compile, and lets a caller of the new name reach its implementation. It is deprecated, so
+    /// the conformance gets a warning at compile time that names the method to implement.
+    ///
+    /// - Warning: A conformance that implements neither this method nor `resource(for:)` also
+    ///   compiles with only that warning, and then each default calls the other, so the first
+    ///   call never returns. It does not crash: an async call keeps its frames on the heap, not
+    ///   the thread's stack, so memory grows until the system terminates the process.
+    ///
+    /// - Parameter identifier: The identifier of the item to retrieve.
+    /// - Returns: Whatever the conformance's `resource(for:)` returns.
+    /// - Throws: Whatever the conformance's `resource(for:)` throws.
+    @available(*, deprecated, message: "This conformance implements resource(for:), the 6.0.0 name, and not item(for:). Its author should implement item(for:). If it implements neither, a call never returns. This default is removed in 8.0.0.")
+    public func item(for identifier: Item.ID) async throws -> Item? {
+        try await resource(for: identifier)
+    }
+
+    /// Calls `reset()`, for a conformance written against 6.0.0.
+    ///
+    /// Such a conformance implements `reset()` and not this method. This default lets it compile,
+    /// and lets a caller of the new name reach its implementation. It is deprecated, so the
+    /// conformance gets a warning at compile time that names the method to implement.
+    ///
+    /// - Warning: A conformance that implements neither this method nor `reset()` also compiles
+    ///   with only that warning, and then each default calls the other, so the first call never
+    ///   returns. It does not crash: an async call keeps its frames on the heap, not the thread's
+    ///   stack, so memory grows until the system terminates the process.
+    ///
+    /// - Throws: Whatever the conformance's `reset()` throws.
+    @available(*, deprecated, message: "This conformance implements reset(), the 6.0.0 name, and not removeAll(). Its author should implement removeAll(). If it implements neither, a call never returns. This default is removed in 8.0.0.")
+    public func removeAll() async throws {
+        try await reset()
+    }
+}
+
+extension Expiry {
+
+    /// An expiry at the given instant: ``at(_:)``.
+    ///
+    /// In 6.0.0 `custom` was a case of ``Expiry``, and it is now ``at(_:)``. This function keeps an
+    /// expression that builds one, such as `.custom(date)`, compiling. A pattern cannot call a
+    /// function, so `case .custom(let date)` in a `switch` or an `if case` no longer compiles; match
+    /// ``at(_:)`` there instead.
+    ///
+    /// - Parameter date: The instant at which the entry stops being served.
+    /// - Returns: `.at(date)`.
+    @available(*, deprecated, renamed: "at(_:)", message: "Use at(_:). custom(_:) is removed in 8.0.0.")
+    public static func custom(_ date: Date) -> Expiry {
+        .at(date)
     }
 }
 

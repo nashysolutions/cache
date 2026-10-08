@@ -43,11 +43,11 @@ struct OtherCodableTestValue: Identifiable, Codable {
 }
 
 /// An item whose content can change while its identifier stays the same, for the tests that pin
-/// what a second stash under one identifier does.
+/// what setting a second item under one identifier does.
 ///
 /// None of the types above can express that. Each derives its identifier from its only field, so
-/// two different values of one of them never share an identifier, and stashing "the same
-/// identifier twice" with them only ever stashes the same value twice. It is `Codable` so that one
+/// two different values of one of them never share an identifier, and setting "the same
+/// identifier twice" with them only ever sets the same value twice. It is `Codable` so that one
 /// type serves both caches.
 struct TestDocument: Identifiable, Equatable, Codable, Sendable {
 

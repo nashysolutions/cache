@@ -32,7 +32,7 @@ import CryptoKit
 /// consumer, so a file matching both is one **this package** wrote. That alone is what an earlier
 /// version of this layout established, and it is not enough. Two caches over different item types
 /// sharing a directory are both this package, so each could recognise, overwrite and delete the
-/// other's entries, and a `reset()` on either cleared both.
+/// other's entries, and a `removeAll()` on either cleared both.
 ///
 /// Scoping every entry under a digest of its item type makes the stronger claim true: a file
 /// below `cache-v2/<type>/` was written by **a cache over that one item type**. That is the claim

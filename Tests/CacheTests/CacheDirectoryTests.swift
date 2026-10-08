@@ -72,7 +72,7 @@ struct CacheDirectoryTests {
     }
 }
 
-/// Stashes one entry through the cache `makeCache` builds, and returns the paths of the files
+/// Sets one entry through the cache `makeCache` builds, and returns the paths of the files
 /// written, relative to `root`.
 ///
 /// Each `FileSystemDirectory` the cache asks for resolves to its own folder below `root`, named
@@ -82,7 +82,7 @@ struct CacheDirectoryTests {
 ///   - root: The folder the stand-in directories are created in.
 ///   - makeCache: Builds the cache. It is called inside the dependency scope, because a cache
 ///     resolves its file system client when it is constructed.
-/// - Returns: The relative paths of the regular files below `root` after the stash.
+/// - Returns: The relative paths of the regular files below `root` after the entry is set.
 private func pathsWritten(
     under root: URL,
     by makeCache: () -> FileSystemCache<CodableTestValue>
@@ -104,7 +104,7 @@ private func pathsWritten(
         makeCache()
     }
 
-    try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+    try await cache.setItem(CodableTestValue(count: "1"), expiry: .long)
 
     return regularFiles(under: root)
 }

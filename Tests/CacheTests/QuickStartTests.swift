@@ -41,23 +41,55 @@ struct Cheese: Identifiable, Codable, Sendable {
 struct QuickStartTests {
 
     /// The `VolatileCache` snippet, run.
-    @Test("The VolatileCache snippet stashes and retrieves", .dependency(\.date.now, pinnedNow))
+    @Test("The VolatileCache snippet sets and retrieves", .dependency(\.date.now, pinnedNow))
     func volatileCacheSnippetRoundTrips() async throws {
 
         let cache = VolatileCache<Cheese>()
 
-        try await cache.stash(Cheese(id: 1, name: "Brie"), duration: .long)
+        try await cache.setItem(Cheese(id: 1, name: "Brie"), expiry: .long)
 
-        let brie = try await cache.resource(for: 1)
+        let brie = try await cache.item(for: 1)
 
         #expect(brie?.name == "Brie")
+    }
+
+    /// The "Choosing an expiry" snippet, run, with the article's claim that `.after` counts its
+    /// duration from the moment the item is set, and that a fixed deadline does not move with it.
+    @Test(
+        "The expiry snippet serves a ten-minute entry for ten minutes; an absolute one does not move",
+        .dependency(\.date.now, pinnedNow)
+    )
+    func expirySnippetCountsFromTheMomentOfSetting() async throws {
+
+        let cache = VolatileCache<Cheese>()
+        let deadline = pinnedNow.addingTimeInterval(5 * 60)
+
+        try await cache.setItem(Cheese(id: 1, name: "Brie"), expiry: .after(.seconds(10 * 60)))
+        try await withDependencies {
+            $0.date.now = pinnedNow.addingTimeInterval(60)
+        } operation: {
+            try await cache.setItem(Cheese(id: 2, name: "Cheddar"), expiry: .at(deadline))
+        }
+
+        func lookUp(_ id: Int, secondsAfterPinnedNow offset: TimeInterval) async throws -> Cheese? {
+            try await withDependencies {
+                $0.date.now = pinnedNow.addingTimeInterval(offset)
+            } operation: {
+                try await cache.item(for: id)
+            }
+        }
+
+        #expect(try await lookUp(1, secondsAfterPinnedNow: 10 * 60)?.name == "Brie")
+        #expect(try await lookUp(1, secondsAfterPinnedNow: 10 * 60 + 1) == nil)
+        #expect(try await lookUp(2, secondsAfterPinnedNow: 5 * 60)?.name == "Cheddar")
+        #expect(try await lookUp(2, secondsAfterPinnedNow: 5 * 60 + 1) == nil)
     }
 
     /// The guard for the whole change: a cache built exactly the way the article says to build
     /// one, with nothing registered, writes to the real file system.
     ///
     /// Before `FileSystemResourceClientKey` had a live value, this is the case that silently did
-    /// nothing: `stash` reported success and no bytes reached disk. The defect was silence, so
+    /// nothing: a write reported success and no bytes reached disk. The defect was silence, so
     /// this test asserts the presence of a file rather than the absence of an error, which a
     /// no-op passes just as readily.
     ///
@@ -82,11 +114,11 @@ struct QuickStartTests {
             FileSystemCache<Cheese>(.temporary, subfolder: subfolder)
         }
 
-        try await cache.stash(Cheese(id: 1, name: "Brie"), duration: .long)
+        try await cache.setItem(Cheese(id: 1, name: "Brie"), expiry: .long)
 
         #expect(regularFiles(under: root).count == 1)
 
-        let brie = try await cache.resource(for: 1)
+        let brie = try await cache.item(for: 1)
 
         #expect(brie?.name == "Brie")
     }
@@ -114,11 +146,11 @@ struct QuickStartTests {
         }
 
         await #expect(throws: (any Error).self) {
-            try await cache.stash(Cheese(id: 1, name: "Brie"), duration: .long)
+            try await cache.setItem(Cheese(id: 1, name: "Brie"), expiry: .long)
         }
 
         await #expect(throws: (any Error).self) {
-            _ = try await cache.resource(for: 1)
+            _ = try await cache.item(for: 1)
         }
     }
 
@@ -128,7 +160,7 @@ struct QuickStartTests {
     /// `swift-dependencies` resolves `testValue` inside a test whether or not a live value exists,
     /// and `foundation-dependencies` declares that test value as a mock which accepts a write and
     /// keeps nothing. So a consumer's integration test that registers no client still gets a cache
-    /// that reports every stash as a success and then serves nothing, with no warning at all.
+    /// that reports every write as a success and then serves nothing, with no warning at all.
     ///
     /// This package cannot close that from here: `testValue` is declared in
     /// `foundation-dependencies` and there can only be one declaration of it.
@@ -152,9 +184,9 @@ struct QuickStartTests {
 
         let cache = FileSystemCache<Cheese>(.temporary, subfolder: subfolder)
 
-        try await cache.stash(Cheese(id: 1, name: "Brie"), duration: .long)
+        try await cache.setItem(Cheese(id: 1, name: "Brie"), expiry: .long)
 
-        #expect(try await cache.resource(for: 1) == nil)
+        #expect(try await cache.item(for: 1) == nil)
         #expect(FileManager.default.fileExists(atPath: root.path) == false)
     }
 
@@ -187,15 +219,15 @@ struct QuickStartTests {
             FileSystemCache<Cheese>(.temporary, subfolder: subfolder)
         }
 
-        try await cache.stash(Cheese(id: 1, name: "Brie"), duration: .long)
+        try await cache.setItem(Cheese(id: 1, name: "Brie"), expiry: .long)
 
-        #expect(try await cache.resource(for: 1) == nil)
+        #expect(try await cache.item(for: 1) == nil)
         #expect(FileManager.default.fileExists(atPath: root.path) == false)
     }
 
     /// The `removeExpired()` snippet, run, with the article's claim that nothing calls it for you.
     ///
-    /// A write and a read of another identifier happen between stashing an expired item and the
+    /// A write and a read of another identifier happen between setting an expired item and the
     /// sweep. If either had swept on the consumer's behalf, the count would be zero.
     @Test(
         "The removeExpired() snippet sweeps only when called: a write and a read before it remove nothing",
@@ -205,14 +237,14 @@ struct QuickStartTests {
 
         let cache = VolatileCache<Cheese>()
 
-        try await cache.stash(Cheese(id: 1, name: "Brie"), duration: .custom(pinnedNow.addingTimeInterval(-60)))
-        try await cache.stash(Cheese(id: 2, name: "Cheddar"), duration: .long)
-        _ = try await cache.resource(for: 2)
+        try await cache.setItem(Cheese(id: 1, name: "Brie"), expiry: .at(pinnedNow.addingTimeInterval(-60)))
+        try await cache.setItem(Cheese(id: 2, name: "Cheddar"), expiry: .long)
+        _ = try await cache.item(for: 2)
 
         let removed = try await cache.removeExpired()
 
         #expect(removed == 1)
-        #expect(try await cache.resource(for: 2)?.name == "Cheddar")
+        #expect(try await cache.item(for: 2)?.name == "Cheddar")
 
         // "The result can be ignored." This compiles without an assignment, which is the claim.
         try await cache.removeExpired()
@@ -234,47 +266,47 @@ struct QuickStartTests {
             FileSystemCache<Cheese>(.temporary, subfolder: subfolder)
         }
 
-        try await cache.stash(Cheese(id: 1, name: "Brie"), duration: .custom(Date().addingTimeInterval(-60)))
-        try await cache.stash(Cheese(id: 2, name: "Cheddar"), duration: .long)
+        try await cache.setItem(Cheese(id: 1, name: "Brie"), expiry: .at(Date().addingTimeInterval(-60)))
+        try await cache.setItem(Cheese(id: 2, name: "Cheddar"), expiry: .long)
         #expect(regularFiles(under: root).count == 2)
 
         let removed = try await cache.removeExpired()
 
         #expect(removed == 1)
         #expect(regularFiles(under: root).count == 1)
-        #expect(try await cache.resource(for: 2)?.name == "Cheddar")
+        #expect(try await cache.item(for: 2)?.name == "Cheddar")
     }
 
     /// The "Controlling time" snippet, run as written.
     ///
-    /// The article states two rules, and the second lookup depends on both. The stash runs outside
-    /// any scope, so it counts the hour from `stashedAt` only if the cache kept the time it was
+    /// The article states two rules, and the second lookup depends on both. The item is set outside
+    /// any scope, so its hour is counted from `storedAt` only if the cache kept the time it was
     /// constructed with. Each lookup runs in a scope of its own, so it sees the entry as 59 or 61
     /// minutes old only if the scope around a call takes precedence over the construction scope.
     /// Were either rule false, `gone` would be the cheese.
     @Test("The time snippet serves an hour's entry at 59 minutes and not at 61, without waiting")
     func timeSnippetServesAtFiftyNineMinutesAndNotAtSixtyOne() async throws {
 
-        let stashedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let storedAt = Date(timeIntervalSince1970: 1_700_000_000)
 
         let cache = withDependencies {
-            $0.date.now = stashedAt
+            $0.date.now = storedAt
         } operation: {
             VolatileCache<Cheese>()
         }
 
-        try await cache.stash(Cheese(id: 1, name: "Brie"), duration: .long)
+        try await cache.setItem(Cheese(id: 1, name: "Brie"), expiry: .long)
 
         let brie = try await withDependencies {
-            $0.date.now = stashedAt.addingTimeInterval(59 * 60)
+            $0.date.now = storedAt.addingTimeInterval(59 * 60)
         } operation: {
-            try await cache.resource(for: 1)
+            try await cache.item(for: 1)
         }
 
         let gone = try await withDependencies {
-            $0.date.now = stashedAt.addingTimeInterval(61 * 60)
+            $0.date.now = storedAt.addingTimeInterval(61 * 60)
         } operation: {
-            try await cache.resource(for: 1)
+            try await cache.item(for: 1)
         }
 
         #expect(brie?.name == "Brie")
@@ -295,7 +327,7 @@ struct QuickStartTests {
         let cache = VolatileCache<Cheese>()
 
         try await withKnownIssue {
-            try await cache.stash(Cheese(id: 1, name: "Brie"), duration: .long)
+            try await cache.setItem(Cheese(id: 1, name: "Brie"), expiry: .long)
         } matching: { issue in
             issue.comments.contains { $0.rawValue.contains(#"@Dependency(\.date) has no test implementation"#) }
         }

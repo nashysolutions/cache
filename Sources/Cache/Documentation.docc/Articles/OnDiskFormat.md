@@ -47,8 +47,8 @@ tooling, decode dates accordingly.
 An entry is written atomically. Its bytes go to a temporary file in the same folder, which is
 then renamed over the entry's filename, so a read never finds a partly written entry under that
 name. If the process ends during a write, the temporary file can be left in the folder. Its name is
-not an entry's name, so it is never read as an entry, and `reset()` and `removeExpired()` leave it
-where it is.
+not an entry's name, so it is never read as an entry, and `removeAll()` and `removeExpired()`
+leave it where it is.
 
 ## Where a subfolder may lead
 
@@ -101,11 +101,11 @@ compared as written.
 The check above covers the folder, not each entry inside it. If a symbolic link sits at an entry's
 own filename, no operation follows it:
 
-- `stash` replaces the link with the entry, and writes nothing where the link points.
+- `setItem(_:expiry:)` replaces the link with the entry, and writes nothing where the link points.
 - Reading the identifier reports `nil` and deletes the link, as it does for an entry that does not
   decode. What the link points to is not read.
-- `removeResource(for:)` deletes the link, not what it points to.
-- `reset()` and `removeExpired()` delete only regular files, so they leave the link in place.
+- `removeItem(for:)` deletes the link, not what it points to.
+- `removeAll()` and `removeExpired()` delete only regular files, so they leave the link in place.
 
 The write needs no check to do this, because renaming a file over a link replaces the link rather
 than following it. The read does need one, and like the folder check it is made before the read
@@ -116,20 +116,20 @@ If you supply your own `fileSystemResourceClient`, its context is asked to write
 the `.atomic` option, and the write replaces a link only if the context honours it. The read's
 check asks the real file system, so for locations that are not on it, nothing is a link.
 
-## What `reset()` deletes
+## What `removeAll()` deletes
 
-`reset()` deletes files inside this cache's own `<type>` folder whose names are a lowercase
+`removeAll()` deletes files inside this cache's own `<type>` folder whose names are a lowercase
 SHA-256 digest carrying the `.cache` extension. It does not delete directories, and it does not
 delete anything else in the folder, including a file you placed inside it yourself.
 
 It does not reach another item type's entries either. Before the `<type>` component existed, it
-did: `reset()` on a `FileSystemCache<Alpha>` cleared every entry a `FileSystemCache<Beta>` had
+did: `removeAll()` on a `FileSystemCache<Alpha>` cleared every entry a `FileSystemCache<Beta>` had
 written to the same directory.
 
-In 6.0.0 and earlier this was not true: `reset()` deleted the directory the cache lived in. With
-the default `subfolder: nil` that directory was the base directory, so calling `reset()` on a
-cache created as `FileSystemCache<Cheese>(.documents)` removed the app's entire `Documents`
-directory.
+In 6.0.0 and earlier this was not true: `reset()`, as `removeAll()` was then named, deleted the
+directory the cache lived in. With the default `subfolder: nil` that directory was the base
+directory, so calling `reset()` on a cache created as `FileSystemCache<Cheese>(.documents)` removed
+the app's entire `Documents` directory.
 
 ## What `removeExpired()` deletes
 
@@ -143,7 +143,7 @@ below clears one only when its identifier is looked up again, and after an updat
 be. An entry whose `expiry` cannot be read either, such as an empty file, is left in place and
 not counted, because nothing says it has expired; the next lookup of its identifier clears it.
 
-Like `reset()`, it does not reach another item type's entries, a file you placed in the folder
+Like `removeAll()`, it does not reach another item type's entries, a file you placed in the folder
 yourself, or anything written by an earlier layout.
 
 The sweep is not transactional. If deleting one entry fails, the error is thrown, and the entries
@@ -173,7 +173,7 @@ and clearing it up not a guess about whose data it is.
 
 An entry from an earlier layout offers neither proof.
 
-Removal does not depend on decoding either. `removeResource(for:)` deletes by the filename the
+Removal does not depend on decoding either. `removeItem(for:)` deletes by the filename the
 identifier derives, so it never reads the entry first.
 
 A failure to *read* an entry that is present, such as a permissions error, is a different matter
