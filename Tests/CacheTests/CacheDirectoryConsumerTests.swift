@@ -46,11 +46,11 @@ struct CacheDirectoryConsumerTests {
 
             let cache = FileSystemCache<CodableTestValue>(directory, subfolder: "consumer")
 
-            try await cache.stash(CodableTestValue(count: "1"), duration: .long)
-            _ = try await cache.resource(for: "1")
-            try await cache.removeResource(for: "1")
+            try await cache.setItem(CodableTestValue(count: "1"), expiry: .long)
+            _ = try await cache.item(for: "1")
+            try await cache.removeItem(for: "1")
             try await cache.removeExpired()
-            try await cache.reset()
+            try await cache.removeAll()
         }
     }
 
@@ -61,8 +61,8 @@ struct CacheDirectoryConsumerTests {
         let support = FileSystemCache<CodableTestValue>(.applicationSupport)
         let explicit = FileSystemCache<CodableTestValue>(CacheDirectory.temporary, subfolder: nil)
 
-        try await caches.stash(CodableTestValue(count: "1"), duration: .long)
-        try await support.stash(CodableTestValue(count: "1"), duration: .long)
-        try await explicit.stash(CodableTestValue(count: "1"), duration: .long)
+        try await caches.setItem(CodableTestValue(count: "1"), expiry: .long)
+        try await support.setItem(CodableTestValue(count: "1"), expiry: .long)
+        try await explicit.setItem(CodableTestValue(count: "1"), expiry: .long)
     }
 }

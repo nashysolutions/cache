@@ -90,20 +90,20 @@ Following links needs the real file system. If you supply your own `fileSystemRe
 whose locations are not on the real file system, nothing resolves, and the folder and `<base>` are
 compared as written.
 
-## What `reset()` deletes
+## What `removeAll()` deletes
 
-`reset()` deletes files inside this cache's own `<type>` folder whose names are a lowercase
+`removeAll()` deletes files inside this cache's own `<type>` folder whose names are a lowercase
 SHA-256 digest carrying the `.cache` extension. It does not delete directories, and it does not
 delete anything else in the folder, including a file you placed inside it yourself.
 
 It does not reach another item type's entries either. Before the `<type>` component existed, it
-did: `reset()` on a `FileSystemCache<Alpha>` cleared every entry a `FileSystemCache<Beta>` had
+did: `removeAll()` on a `FileSystemCache<Alpha>` cleared every entry a `FileSystemCache<Beta>` had
 written to the same directory.
 
-In 6.0.0 and earlier this was not true: `reset()` deleted the directory the cache lived in. With
-the default `subfolder: nil` that directory was the base directory, so calling `reset()` on a
-cache created as `FileSystemCache<Cheese>(.documents)` removed the app's entire `Documents`
-directory.
+In 6.0.0 and earlier this was not true: `reset()`, as `removeAll()` was then named, deleted the
+directory the cache lived in. With the default `subfolder: nil` that directory was the base
+directory, so calling `reset()` on a cache created as `FileSystemCache<Cheese>(.documents)` removed
+the app's entire `Documents` directory.
 
 ## What `removeExpired()` deletes
 
@@ -117,7 +117,7 @@ below clears one only when its identifier is looked up again, and after an updat
 be. An entry whose `expiry` cannot be read either, such as an empty file, is left in place and
 not counted, because nothing says it has expired; the next lookup of its identifier clears it.
 
-Like `reset()`, it does not reach another item type's entries, a file you placed in the folder
+Like `removeAll()`, it does not reach another item type's entries, a file you placed in the folder
 yourself, or anything written by an earlier layout.
 
 The sweep is not transactional. If deleting one entry fails, the error is thrown, and the entries
@@ -147,7 +147,7 @@ and clearing it up not a guess about whose data it is.
 
 An entry from an earlier layout offers neither proof.
 
-Removal does not depend on decoding either. `removeResource(for:)` deletes by the filename the
+Removal does not depend on decoding either. `removeItem(for:)` deletes by the filename the
 identifier derives, so it never reads the entry first.
 
 A failure to *read* an entry that is present, such as a permissions error, is a different matter

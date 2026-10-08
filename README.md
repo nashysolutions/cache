@@ -27,7 +27,7 @@ It is designed around a small set of constraints:
 - Behaviour should be **deterministic and testable**
 - Storage should remain an **implementation detail**
 
-You ask for a resource.  
+You ask for an item.  
 You either get it — or you don’t.
 
 ---
@@ -67,12 +67,12 @@ struct Cheese: Identifiable, Sendable {
 
 let cache = VolatileCache<Cheese>()
 
-try await cache.stash(
+try await cache.setItem(
     Cheese(id: "123", name: "Brie"),
-    duration: .short
+    expiry: .short
 )
 
-let cheese = try await cache.resource(for: "123")
+let cheese = try await cache.item(for: "123")
 ```
 
 ---

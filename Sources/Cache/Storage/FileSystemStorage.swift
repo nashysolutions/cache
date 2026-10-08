@@ -242,7 +242,7 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
     /// Three outcomes are kept apart, because a caller needs them apart:
     ///
     /// - **No entry on disk.** Reports `nil`. This is the ordinary state of every identifier a
-    ///   consumer has not stashed, including all of them before the first stash on a fresh
+    ///   consumer has not set, including all of them before the first write on a fresh
     ///   install, so it is not a failure and must not be reported as one.
     /// - **An entry that does not decode.** Reports `nil`, and deletes the entry. A stored
     ///   payload stops decoding when the item's `Codable` shape changes, which an app update

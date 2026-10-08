@@ -18,7 +18,7 @@ import Cache
 ///
 /// Every step runs at a time chosen with `withDependencies`, so nothing waits and nothing depends
 /// on when the suite runs. The instants are in 2001. A cache that read the wall clock at any of
-/// the three places it needs the time, when stashing, looking up or sweeping, would therefore be
+/// the three places it needs the time, when setting, looking up or sweeping, would therefore be
 /// years out, and a step on one side of a deadline or the other would fail.
 ///
 /// No clock is pinned for the suite as a whole. A step that ran outside ``at(_:_:)`` would read
@@ -48,16 +48,16 @@ struct InjectedTimeTests {
         let cache = makeCache(backend, root: root)
         let deadline = pinnedNow.addingTimeInterval(lifetime.seconds)
 
-        try await at(pinnedNow) { try await cache.stash(document, duration: lifetime.expiry) }
+        try await at(pinnedNow) { try await cache.setItem(document, expiry: lifetime.expiry) }
 
         let justBefore = try await at(deadline.addingTimeInterval(-oneMillisecond)) {
-            try await cache.resource(for: document.id)
+            try await cache.item(for: document.id)
         }
         let atTheDeadline = try await at(deadline) {
-            try await cache.resource(for: document.id)
+            try await cache.item(for: document.id)
         }
         let justAfter = try await at(deadline.addingTimeInterval(oneMillisecond)) {
-            try await cache.resource(for: document.id)
+            try await cache.item(for: document.id)
         }
 
         #expect(justBefore == document)
@@ -82,7 +82,7 @@ struct InjectedTimeTests {
         let cache = makeCache(backend, root: root)
         let deadline = pinnedNow.addingTimeInterval(lifetime.seconds)
 
-        try await at(pinnedNow) { try await cache.stash(document, duration: lifetime.expiry) }
+        try await at(pinnedNow) { try await cache.setItem(document, expiry: lifetime.expiry) }
 
         let sweptJustBefore = try await at(deadline.addingTimeInterval(-oneMillisecond)) {
             try await cache.removeExpired()
@@ -91,13 +91,13 @@ struct InjectedTimeTests {
             try await cache.removeExpired()
         }
         let servedAfterBothSweeps = try await at(deadline) {
-            try await cache.resource(for: document.id)
+            try await cache.item(for: document.id)
         }
         let sweptJustAfter = try await at(deadline.addingTimeInterval(oneMillisecond)) {
             try await cache.removeExpired()
         }
         let servedBeforeTheDeadlineAfterTheSweep = try await at(deadline.addingTimeInterval(-oneMillisecond)) {
-            try await cache.resource(for: document.id)
+            try await cache.item(for: document.id)
         }
 
         #expect(sweptJustBefore == 0)
@@ -107,34 +107,71 @@ struct InjectedTimeTests {
         #expect(servedBeforeTheDeadlineAfterTheSweep == nil)
     }
 
-    /// Pins that the time is read on every stash, not once for the cache.
+    /// Pins that the time is read every time an item is set, not once for the cache.
     ///
-    /// Two entries with the same preset are stashed 30 seconds apart, so each deadline is counted
-    /// from its own stash. A cache that read the time once, when it was constructed or first used,
-    /// would give both the same deadline.
-    @Test("Each entry's deadline is counted from the time of its own stash", arguments: Backend.allCases)
-    func eachDeadlineIsCountedFromItsOwnStash(backend: Backend) async throws {
+    /// Two entries with the same preset are set 30 seconds apart, so each deadline is counted
+    /// from the time it was set. A cache that read the time once, when it was constructed or
+    /// first used, would give both the same deadline.
+    @Test("Each entry's deadline is counted from the time it was set", arguments: Backend.allCases)
+    func eachDeadlineIsCountedFromTheTimeItWasSet(backend: Backend) async throws {
 
         let root = try makeSandbox()
         defer { try? FileManager.default.removeItem(at: root) }
 
         let cache = makeCache(backend, root: root)
-        let earlier = TestDocument(id: "earlier", body: "stashed first")
-        let later = TestDocument(id: "later", body: "stashed 30 seconds after")
+        let earlier = TestDocument(id: "earlier", body: "set first")
+        let later = TestDocument(id: "later", body: "set 30 seconds after")
 
-        try await at(pinnedNow) { try await cache.stash(earlier, duration: .short) }
-        try await at(pinnedNow.addingTimeInterval(30)) { try await cache.stash(later, duration: .short) }
+        try await at(pinnedNow) { try await cache.setItem(earlier, expiry: .short) }
+        try await at(pinnedNow.addingTimeInterval(30)) { try await cache.setItem(later, expiry: .short) }
 
         let afterTheEarlierDeadline = pinnedNow.addingTimeInterval(61)
-        let earlierServed = try await at(afterTheEarlierDeadline) { try await cache.resource(for: earlier.id) }
-        let laterServed = try await at(afterTheEarlierDeadline) { try await cache.resource(for: later.id) }
+        let earlierServed = try await at(afterTheEarlierDeadline) { try await cache.item(for: earlier.id) }
+        let laterServed = try await at(afterTheEarlierDeadline) { try await cache.item(for: later.id) }
 
         let afterTheLaterDeadline = pinnedNow.addingTimeInterval(91)
-        let laterServedAfterItsOwn = try await at(afterTheLaterDeadline) { try await cache.resource(for: later.id) }
+        let laterServedAfterItsOwn = try await at(afterTheLaterDeadline) { try await cache.item(for: later.id) }
 
         #expect(earlierServed == nil)
         #expect(laterServed == later)
         #expect(laterServedAfterItsOwn == nil)
+    }
+
+    /// Pins what a duration that is not positive does at the moment the item is set.
+    ///
+    /// The boundary tests above already place both deadlines; this states the consequence a
+    /// caller sees without moving the clock. A zero duration's deadline is the moment of setting,
+    /// which a lookup at that moment still meets, so the entry is served once and then never. A
+    /// negative duration's deadline precedes the moment of setting, so the entry is never served,
+    /// and a sweep at that same moment removes it.
+    @Test("A zero duration is served at the moment it is set; a negative one is not", arguments: Backend.allCases)
+    func durationsThatAreNotPositive(backend: Backend) async throws {
+
+        let root = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let cache = makeCache(backend, root: root)
+        let zero = TestDocument(id: "zero", body: "zero")
+        let negative = TestDocument(id: "negative", body: "negative")
+
+        try await at(pinnedNow) { try await cache.setItem(zero, expiry: .after(.zero)) }
+        try await at(pinnedNow) { try await cache.setItem(negative, expiry: .after(.seconds(-1))) }
+
+        let zeroServedAtOnce = try await at(pinnedNow) { try await cache.item(for: zero.id) }
+        let negativeServedAtOnce = try await at(pinnedNow) { try await cache.item(for: negative.id) }
+        let zeroServedJustAfter = try await at(pinnedNow.addingTimeInterval(oneMillisecond)) {
+            try await cache.item(for: zero.id)
+        }
+
+        // The lookup that found the negative entry expired also removed it, so it is set again for
+        // the sweep to find. The zero entry was removed by the lookup just after its deadline.
+        try await at(pinnedNow) { try await cache.setItem(negative, expiry: .after(.seconds(-1))) }
+        let sweptAtOnce = try await at(pinnedNow) { try await cache.removeExpired() }
+
+        #expect(zeroServedAtOnce == zero)
+        #expect(negativeServedAtOnce == nil)
+        #expect(zeroServedJustAfter == nil)
+        #expect(sweptAtOnce == 1)
     }
 }
 
@@ -151,21 +188,32 @@ struct Lifetime: Sendable, CustomTestStringConvertible {
 
     let expiry: Expiry
 
-    /// How long after the stash the deadline falls.
+    /// How long after the item is set the deadline falls.
     let seconds: TimeInterval
 
     let testDescription: String
 }
 
-/// Every preset, and a custom expiry, each stashed at ``pinnedNow``.
+/// Every preset, durations of other lengths and signs, and an absolute expiry, each set at
+/// ``pinnedNow``.
+///
+/// The fractional durations are there because a `Duration` keeps whole seconds and attoseconds
+/// apart. A conversion that dropped the attoseconds would put their deadline a whole number of
+/// seconds out, which the millisecond either side of it would catch, and the negative one does
+/// the same for a conversion that got the sign of either part wrong. The zero and negative
+/// durations are also pinned at the moment of setting, by `durationsThatAreNotPositive`.
 private let lifetimes = [
     Lifetime(expiry: .short, seconds: 60, testDescription: ".short"),
     Lifetime(expiry: .medium, seconds: 3 * 60, testDescription: ".medium"),
     Lifetime(expiry: .long, seconds: 60 * 60, testDescription: ".long"),
-    Lifetime(expiry: .custom(pinnedNow.addingTimeInterval(90)), seconds: 90, testDescription: ".custom")
+    Lifetime(expiry: .after(.seconds(90)), seconds: 90, testDescription: ".after(.seconds(90))"),
+    Lifetime(expiry: .after(.milliseconds(1500)), seconds: 1.5, testDescription: ".after(.milliseconds(1500))"),
+    Lifetime(expiry: .after(.zero), seconds: 0, testDescription: ".after(.zero)"),
+    Lifetime(expiry: .after(.milliseconds(-1500)), seconds: -1.5, testDescription: ".after(.milliseconds(-1500))"),
+    Lifetime(expiry: .at(pinnedNow.addingTimeInterval(90)), seconds: 90, testDescription: ".at")
 ]
 
-/// The item every boundary test stashes.
+/// The item every boundary test sets.
 private let document = TestDocument(id: "1", body: "brie")
 
 /// The step either side of a deadline.

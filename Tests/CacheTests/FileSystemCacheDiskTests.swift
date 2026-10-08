@@ -23,7 +23,7 @@ import Files
 @Suite("FileSystemCache on-disk behaviour", .dependency(\.date.now, pinnedNow))
 struct FileSystemCacheDiskTests {
 
-    @Test("reset() leaves the base directory and a foreign file intact when no subfolder is configured")
+    @Test("removeAll() leaves the base directory and a foreign file intact when no subfolder is configured")
     func resetSparesBaseDirectoryAndForeignFile() async throws {
 
         let root = try makeSandbox()
@@ -33,15 +33,15 @@ struct FileSystemCacheDiskTests {
         try Data("do not delete me".utf8).write(to: sentinel)
 
         let cache = makeCache(root: root, subfolder: nil)
-        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
-        try await cache.reset()
+        try await cache.setItem(CodableTestValue(count: "1"), expiry: .long)
+        try await cache.removeAll()
 
         #expect(FileManager.default.fileExists(atPath: sentinel.path))
         #expect(FileManager.default.fileExists(atPath: root.path))
         #expect(regularFiles(under: root) == ["unrelated-user-file.txt"])
     }
 
-    @Test("reset() leaves foreign files in the configured subfolder and the base directory intact")
+    @Test("removeAll() leaves foreign files in the configured subfolder and the base directory intact")
     func resetSparesForeignFilesAroundConfiguredSubfolder() async throws {
 
         let root = try makeSandbox()
@@ -56,8 +56,8 @@ struct FileSystemCacheDiskTests {
         try Data("do not delete me either".utf8).write(to: sharedSentinel)
 
         let cache = makeCache(root: root, subfolder: "shared")
-        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
-        try await cache.reset()
+        try await cache.setItem(CodableTestValue(count: "1"), expiry: .long)
+        try await cache.removeAll()
 
         #expect(FileManager.default.fileExists(atPath: baseSentinel.path))
         #expect(FileManager.default.fileExists(atPath: sharedSentinel.path))
@@ -69,14 +69,14 @@ struct FileSystemCacheDiskTests {
     /// "delete the directory this cache writes into".
     ///
     /// Both survive the two tests above; only the former survives this one.
-    @Test("reset() leaves a foreign file sitting alongside the cache's own entries intact")
+    @Test("removeAll() leaves a foreign file sitting alongside the cache's own entries intact")
     func resetSparesForeignFileBesideItsOwnEntries() async throws {
 
         let root = try makeSandbox()
         defer { try? FileManager.default.removeItem(at: root) }
 
         let cache = makeCache(root: root, subfolder: "shared")
-        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+        try await cache.setItem(CodableTestValue(count: "1"), expiry: .long)
 
         // Find where the cache actually writes, without asserting what that location is.
         let entry = try #require(regularFiles(under: root).first)
@@ -85,7 +85,7 @@ struct FileSystemCacheDiskTests {
         let sentinel = writeDirectory.appending(component: "unrelated-neighbour.txt")
         try Data("do not delete me".utf8).write(to: sentinel)
 
-        try await cache.reset()
+        try await cache.removeAll()
 
         #expect(FileManager.default.fileExists(atPath: sentinel.path))
         #expect(regularFiles(under: root).count == 1)
@@ -104,7 +104,7 @@ struct FileSystemCacheDiskTests {
         defer { try? FileManager.default.removeItem(at: root) }
 
         let cache = makeCache(root: root, subfolder: "shared")
-        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+        try await cache.setItem(CodableTestValue(count: "1"), expiry: .long)
 
         let type = sha256Hex(String(reflecting: CodableTestValue.self))
         let digest = sha256Hex("1")
@@ -145,7 +145,7 @@ struct FileSystemCacheDiskTests {
             }
 
             let before = regularFiles(under: root)
-            try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+            try await cache.setItem(CodableTestValue(count: "1"), expiry: .long)
             let written = regularFiles(under: root).subtracting(before)
 
             #expect(written.count == 1, "\(directory)")
@@ -153,14 +153,14 @@ struct FileSystemCacheDiskTests {
         }
     }
 
-    /// Pins replace semantics on disk: a second stash under an identifier the cache already holds
+    /// Pins replace semantics on disk: a second item set under an identifier the cache already holds
     /// replaces the first entry, rather than being ignored or written beside it.
     ///
     /// There are two observables because each catches a different way of getting this wrong. The
-    /// read says which stash won. The file count says the first entry did not survive alongside
+    /// read says which item won. The file count says the first entry did not survive alongside
     /// the second, which a read alone cannot show.
-    @Test("A second stash under the same identifier replaces the first, leaving one entry")
-    func secondStashUnderSameIdentifierReplacesTheFirst() async throws {
+    @Test("A second item set under the same identifier replaces the first, leaving one entry")
+    func secondItemUnderSameIdentifierReplacesTheFirst() async throws {
 
         let root = try makeSandbox()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -169,10 +169,10 @@ struct FileSystemCacheDiskTests {
         let first = TestDocument(id: "1", body: "first draft")
         let second = TestDocument(id: "1", body: "second draft")
 
-        try await cache.stash(first, duration: .long)
-        try await cache.stash(second, duration: .long)
+        try await cache.setItem(first, expiry: .long)
+        try await cache.setItem(second, expiry: .long)
 
-        #expect(try await cache.resource(for: "1") == second)
+        #expect(try await cache.item(for: "1") == second)
         #expect(regularFiles(under: root).count == 1)
     }
 
@@ -187,7 +187,7 @@ struct FileSystemCacheDiskTests {
     /// there is nothing here to clean up in the first place.
     ///
     /// A first-use sweep that identified its candidates by content shape deleted both on the
-    /// first `stash()`, silently, with no error and no opt-out. That sweep has been taken out,
+    /// first write, silently, with no error and no opt-out. That sweep has been taken out,
     /// and this test is what stops it, or anything like it, coming back.
     @Test("A consumer's own JSON file shaped like a cache entry survives the cache being used")
     func consumerFilesShapedLikeCacheEntriesSurviveFirstUse() async throws {
@@ -212,10 +212,10 @@ struct FileSystemCacheDiskTests {
         try sessionBody.write(to: session)
 
         let baseCache = makeCache(root: root, subfolder: nil)
-        try await baseCache.stash(CodableTestValue(count: "1"), duration: .long)
+        try await baseCache.setItem(CodableTestValue(count: "1"), expiry: .long)
 
         let subfolderCache = makeCache(root: root, subfolder: "shared")
-        try await subfolderCache.stash(CodableTestValue(count: "2"), duration: .long)
+        try await subfolderCache.setItem(CodableTestValue(count: "2"), expiry: .long)
 
         #expect(manager.fileExists(atPath: shoppingList.path))
         #expect(manager.fileExists(atPath: session.path))
@@ -246,8 +246,8 @@ struct FileSystemCacheDiskTests {
         try body.write(to: orphan)
 
         let cache = makeCache(root: root, subfolder: nil)
-        try await cache.stash(CodableTestValue(count: "42"), duration: .long)
-        try await cache.reset()
+        try await cache.setItem(CodableTestValue(count: "42"), expiry: .long)
+        try await cache.removeAll()
 
         #expect(FileManager.default.fileExists(atPath: orphan.path))
         #expect((try? Data(contentsOf: orphan)) == body)
@@ -264,7 +264,7 @@ struct FileSystemCacheDiskTests {
 @Suite("FileSystemCache misses and unservable entries", .dependency(\.date.now, pinnedNow))
 struct FileSystemCacheMissTests {
 
-    @Test("A read for an identifier that was never stashed reports nil")
+    @Test("A read for an identifier that was never set reports nil")
     func readForAbsentIdentifierReportsNil() async throws {
 
         let root = try makeSandbox()
@@ -272,12 +272,12 @@ struct FileSystemCacheMissTests {
 
         let cache = makeCache(root: root, subfolder: nil)
 
-        let retrieved = try await cache.resource(for: "never-stashed")
+        let retrieved = try await cache.item(for: "never-set")
 
         #expect(retrieved == nil)
     }
 
-    @Test("A remove for an identifier that was never stashed does not throw")
+    @Test("A remove for an identifier that was never set does not throw")
     func removeForAbsentIdentifierDoesNotThrow() async throws {
 
         let root = try makeSandbox()
@@ -286,7 +286,7 @@ struct FileSystemCacheMissTests {
         let cache = makeCache(root: root, subfolder: nil)
 
         await #expect(throws: Never.self) {
-            try await cache.removeResource(for: "never-stashed")
+            try await cache.removeItem(for: "never-set")
         }
     }
 
@@ -299,12 +299,12 @@ struct FileSystemCacheMissTests {
         defer { try? FileManager.default.removeItem(at: root) }
 
         let cache = makeCache(root: root, subfolder: nil)
-        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+        try await cache.setItem(CodableTestValue(count: "1"), expiry: .long)
 
         let entry = root.appending(path: try #require(regularFiles(under: root).first))
         try undecodableRecordData().write(to: entry)
 
-        let retrieved = try await cache.resource(for: "1")
+        let retrieved = try await cache.item(for: "1")
 
         #expect(retrieved == nil)
         #expect(FileManager.default.fileExists(atPath: entry.path) == false)
@@ -317,12 +317,12 @@ struct FileSystemCacheMissTests {
         defer { try? FileManager.default.removeItem(at: root) }
 
         let cache = makeCache(root: root, subfolder: nil)
-        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+        try await cache.setItem(CodableTestValue(count: "1"), expiry: .long)
 
         let entry = root.appending(path: try #require(regularFiles(under: root).first))
         try undecodableRecordData().write(to: entry)
 
-        try await cache.removeResource(for: "1")
+        try await cache.removeItem(for: "1")
 
         #expect(FileManager.default.fileExists(atPath: entry.path) == false)
     }
@@ -339,11 +339,11 @@ struct FileSystemCacheMissTests {
         defer { try? FileManager.default.removeItem(at: root) }
 
         let cache = makeCache(root: root, subfolder: nil)
-        try await cache.stash(CodableTestValue(count: "1"), duration: expiredAnHourAgo())
+        try await cache.setItem(CodableTestValue(count: "1"), expiry: expiredAnHourAgo())
 
         let entry = root.appending(path: try #require(regularFiles(under: root).first))
 
-        let retrieved = try await cache.resource(for: "1")
+        let retrieved = try await cache.item(for: "1")
 
         #expect(retrieved == nil)
         #expect(FileManager.default.fileExists(atPath: entry.path) == false)
@@ -358,13 +358,13 @@ struct FileSystemCacheMissTests {
         defer { try? FileManager.default.removeItem(at: root) }
 
         try await makeCache(root: root, subfolder: nil)
-            .stash(CodableTestValue(count: "1"), duration: .long)
+            .setItem(CodableTestValue(count: "1"), expiry: .long)
 
         let written = regularFiles(under: root)
         let cache = makeCache(agent: UnreadableAgent(root: root), subfolder: nil)
 
         await #expect(throws: UnreadableAgent.ReadFailure.self) {
-            _ = try await cache.resource(for: "1")
+            _ = try await cache.item(for: "1")
         }
 
         #expect(regularFiles(under: root) == written)
@@ -393,12 +393,12 @@ struct FileSystemCacheCrossTypeTests {
         let alpha = makeCache(CodableTestValue.self, root: root, subfolder: nil)
         let beta = makeCache(OtherCodableTestValue.self, root: root, subfolder: nil)
 
-        try await alpha.stash(CodableTestValue(count: "1"), duration: .long)
-        try await beta.stash(OtherCodableTestValue(label: "1"), duration: .long)
+        try await alpha.setItem(CodableTestValue(count: "1"), expiry: .long)
+        try await beta.setItem(OtherCodableTestValue(label: "1"), expiry: .long)
 
         #expect(regularFiles(under: root).count == 2)
-        #expect(try await alpha.resource(for: "1")?.count == "1")
-        #expect(try await beta.resource(for: "1")?.label == "1")
+        #expect(try await alpha.item(for: "1")?.count == "1")
+        #expect(try await beta.item(for: "1")?.label == "1")
     }
 
     @Test("A read by one item type does not delete another's entry")
@@ -410,15 +410,15 @@ struct FileSystemCacheCrossTypeTests {
         let alpha = makeCache(CodableTestValue.self, root: root, subfolder: nil)
         let beta = makeCache(OtherCodableTestValue.self, root: root, subfolder: nil)
 
-        try await beta.stash(OtherCodableTestValue(label: "1"), duration: .long)
+        try await beta.setItem(OtherCodableTestValue(label: "1"), expiry: .long)
         let written = regularFiles(under: root)
 
-        #expect(try await alpha.resource(for: "1") == nil)
+        #expect(try await alpha.item(for: "1") == nil)
         #expect(regularFiles(under: root) == written)
-        #expect(try await beta.resource(for: "1")?.label == "1")
+        #expect(try await beta.item(for: "1")?.label == "1")
     }
 
-    @Test("reset() on one item type's cache leaves another's entries alone")
+    @Test("removeAll() on one item type's cache leaves another's entries alone")
     func resetSparesAnotherItemTypesEntries() async throws {
 
         let root = try makeSandbox()
@@ -427,16 +427,16 @@ struct FileSystemCacheCrossTypeTests {
         let alpha = makeCache(CodableTestValue.self, root: root, subfolder: nil)
         let beta = makeCache(OtherCodableTestValue.self, root: root, subfolder: nil)
 
-        try await alpha.stash(CodableTestValue(count: "1"), duration: .long)
-        try await beta.stash(OtherCodableTestValue(label: "1"), duration: .long)
+        try await alpha.setItem(CodableTestValue(count: "1"), expiry: .long)
+        try await beta.setItem(OtherCodableTestValue(label: "1"), expiry: .long)
 
-        try await alpha.reset()
+        try await alpha.removeAll()
 
-        #expect(try await alpha.resource(for: "1") == nil)
-        #expect(try await beta.resource(for: "1")?.label == "1")
+        #expect(try await alpha.item(for: "1") == nil)
+        #expect(try await beta.item(for: "1")?.label == "1")
     }
 
-    @Test("removeResource(for:) on one item type's cache leaves another's entry alone")
+    @Test("removeItem(for:) on one item type's cache leaves another's entry alone")
     func removeSparesAnotherItemTypesEntry() async throws {
 
         let root = try makeSandbox()
@@ -445,12 +445,12 @@ struct FileSystemCacheCrossTypeTests {
         let alpha = makeCache(CodableTestValue.self, root: root, subfolder: nil)
         let beta = makeCache(OtherCodableTestValue.self, root: root, subfolder: nil)
 
-        try await alpha.stash(CodableTestValue(count: "1"), duration: .long)
-        try await beta.stash(OtherCodableTestValue(label: "1"), duration: .long)
+        try await alpha.setItem(CodableTestValue(count: "1"), expiry: .long)
+        try await beta.setItem(OtherCodableTestValue(label: "1"), expiry: .long)
 
-        try await alpha.removeResource(for: "1")
+        try await alpha.removeItem(for: "1")
 
-        #expect(try await beta.resource(for: "1")?.label == "1")
+        #expect(try await beta.item(for: "1")?.label == "1")
     }
 }
 
@@ -480,7 +480,7 @@ struct FileSystemCacheFaultTests {
 
         let root = try makeSandbox()
         let cache = makeCache(root: root, subfolder: nil)
-        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+        try await cache.setItem(CodableTestValue(count: "1"), expiry: .long)
 
         let folder = try entryFolder(under: root)
         let entry = folder.appending(
@@ -501,7 +501,7 @@ struct FileSystemCacheFaultTests {
         }
 
         await #expect(throws: (any Error).self) {
-            _ = try await cache.resource(for: "1")
+            _ = try await cache.item(for: "1")
         }
     }
 
@@ -511,7 +511,7 @@ struct FileSystemCacheFaultTests {
 
         let root = try makeSandbox()
         let cache = makeCache(root: root, subfolder: nil)
-        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+        try await cache.setItem(CodableTestValue(count: "1"), expiry: .long)
 
         let folder = try entryFolder(under: root)
 
@@ -527,7 +527,7 @@ struct FileSystemCacheFaultTests {
         }
 
         await #expect(throws: (any Error).self) {
-            try await cache.removeResource(for: "1")
+            try await cache.removeItem(for: "1")
         }
     }
 
@@ -544,7 +544,7 @@ struct FileSystemCacheFaultTests {
 
         let root = try makeSandbox()
         let cache = makeCache(root: root, subfolder: nil)
-        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+        try await cache.setItem(CodableTestValue(count: "1"), expiry: .long)
 
         let folder = try entryFolder(under: root)
 
@@ -560,7 +560,7 @@ struct FileSystemCacheFaultTests {
         }
 
         await #expect(throws: CocoaError.self) {
-            try await cache.stash(CodableTestValue(count: "2"), duration: .long)
+            try await cache.setItem(CodableTestValue(count: "2"), expiry: .long)
         }
     }
 }
@@ -580,16 +580,16 @@ struct FileSystemCacheSweepTests {
         defer { try? FileManager.default.removeItem(at: root) }
 
         let cache = makeCache(root: root, subfolder: nil)
-        try await cache.stash(CodableTestValue(count: "expired-a"), duration: expiredAnHourAgo())
-        try await cache.stash(CodableTestValue(count: "expired-b"), duration: expiredAnHourAgo())
-        try await cache.stash(CodableTestValue(count: "live"), duration: .long)
+        try await cache.setItem(CodableTestValue(count: "expired-a"), expiry: expiredAnHourAgo())
+        try await cache.setItem(CodableTestValue(count: "expired-b"), expiry: expiredAnHourAgo())
+        try await cache.setItem(CodableTestValue(count: "live"), expiry: .long)
         #expect(regularFiles(under: root).count == 3)
 
         let removed = try await cache.removeExpired()
 
         #expect(removed == 2)
         #expect(regularFiles(under: root).count == 1)
-        #expect(try await cache.resource(for: "live")?.count == "live")
+        #expect(try await cache.item(for: "live")?.count == "live")
     }
 
     @Test("A second sweep finds nothing, because the first removed the entries rather than only counting them")
@@ -599,7 +599,7 @@ struct FileSystemCacheSweepTests {
         defer { try? FileManager.default.removeItem(at: root) }
 
         let cache = makeCache(root: root, subfolder: nil)
-        try await cache.stash(CodableTestValue(count: "expired"), duration: expiredAnHourAgo())
+        try await cache.setItem(CodableTestValue(count: "expired"), expiry: expiredAnHourAgo())
 
         #expect(try await cache.removeExpired() == 1)
         #expect(try await cache.removeExpired() == 0)
@@ -612,8 +612,8 @@ struct FileSystemCacheSweepTests {
         defer { try? FileManager.default.removeItem(at: root) }
 
         let cache = makeCache(root: root, subfolder: nil)
-        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
-        try await cache.stash(CodableTestValue(count: "2"), duration: .long)
+        try await cache.setItem(CodableTestValue(count: "1"), expiry: .long)
+        try await cache.setItem(CodableTestValue(count: "2"), expiry: .long)
         let written = regularFiles(under: root)
 
         #expect(try await cache.removeExpired() == 0)
@@ -642,7 +642,7 @@ struct FileSystemCacheSweepTests {
         defer { try? FileManager.default.removeItem(at: root) }
 
         let cache = makeCache(root: root, subfolder: nil)
-        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+        try await cache.setItem(CodableTestValue(count: "1"), expiry: .long)
 
         let entry = root.appending(path: try #require(regularFiles(under: root).first))
         try undecodableRecordData(expiry: pinnedNow.addingTimeInterval(-3600)).write(to: entry)
@@ -658,7 +658,7 @@ struct FileSystemCacheSweepTests {
         defer { try? FileManager.default.removeItem(at: root) }
 
         let cache = makeCache(root: root, subfolder: nil)
-        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+        try await cache.setItem(CodableTestValue(count: "1"), expiry: .long)
 
         let entry = root.appending(path: try #require(regularFiles(under: root).first))
         try undecodableRecordData(expiry: pinnedNow.addingTimeInterval(3600)).write(to: entry)
@@ -676,7 +676,7 @@ struct FileSystemCacheSweepTests {
         defer { try? FileManager.default.removeItem(at: root) }
 
         let cache = makeCache(root: root, subfolder: nil)
-        try await cache.stash(CodableTestValue(count: "1"), duration: expiredAnHourAgo())
+        try await cache.setItem(CodableTestValue(count: "1"), expiry: expiredAnHourAgo())
 
         let entry = root.appending(path: try #require(regularFiles(under: root).first))
         try Data().write(to: entry)
@@ -685,7 +685,7 @@ struct FileSystemCacheSweepTests {
         #expect(FileManager.default.fileExists(atPath: entry.path))
     }
 
-    /// The same measurement `reset()` is held to: a file the cache did not write survives, even
+    /// The same measurement `removeAll()` is held to: a file the cache did not write survives, even
     /// sitting beside the cache's own entries and even carrying an expiry that has passed.
     @Test("A foreign file beside the entries survives the sweep, even one shaped like an expired entry")
     func sweepSparesForeignFileBesideItsOwnEntries() async throws {
@@ -694,7 +694,7 @@ struct FileSystemCacheSweepTests {
         defer { try? FileManager.default.removeItem(at: root) }
 
         let cache = makeCache(root: root, subfolder: nil)
-        try await cache.stash(CodableTestValue(count: "expired"), duration: expiredAnHourAgo())
+        try await cache.setItem(CodableTestValue(count: "expired"), expiry: expiredAnHourAgo())
 
         let entry = try #require(regularFiles(under: root).first)
         let writeDirectory = root.appending(path: entry).deletingLastPathComponent()
@@ -717,8 +717,8 @@ struct FileSystemCacheSweepTests {
         let alpha = makeCache(CodableTestValue.self, root: root, subfolder: nil)
         let beta = makeCache(OtherCodableTestValue.self, root: root, subfolder: nil)
 
-        try await alpha.stash(CodableTestValue(count: "1"), duration: expiredAnHourAgo())
-        try await beta.stash(OtherCodableTestValue(label: "1"), duration: expiredAnHourAgo())
+        try await alpha.setItem(CodableTestValue(count: "1"), expiry: expiredAnHourAgo())
+        try await beta.setItem(OtherCodableTestValue(label: "1"), expiry: expiredAnHourAgo())
 
         #expect(try await alpha.removeExpired() == 1)
         #expect(regularFiles(under: root).count == 1)
@@ -733,7 +733,7 @@ struct FileSystemCacheSweepTests {
 
         let root = try makeSandbox()
         let cache = makeCache(root: root, subfolder: nil)
-        try await cache.stash(CodableTestValue(count: "1"), duration: expiredAnHourAgo())
+        try await cache.setItem(CodableTestValue(count: "1"), expiry: expiredAnHourAgo())
 
         let entry = try #require(regularFiles(under: root).first)
         let folder = root.appending(path: entry).deletingLastPathComponent()
@@ -827,8 +827,8 @@ struct FileSystemCacheSweepTests {
     /// Two expired entries, and their filenames in the order a `SweepFaultAgent` lists them.
     private func seedTwoExpiredEntries(under root: URL) async throws -> [String] {
         let seed = makeCache(root: root, subfolder: nil)
-        try await seed.stash(CodableTestValue(count: "expired-a"), duration: expiredAnHourAgo())
-        try await seed.stash(CodableTestValue(count: "expired-b"), duration: expiredAnHourAgo())
+        try await seed.setItem(CodableTestValue(count: "expired-a"), expiry: expiredAnHourAgo())
+        try await seed.setItem(CodableTestValue(count: "expired-b"), expiry: expiredAnHourAgo())
         return regularFiles(under: root).map { URL(filePath: $0).lastPathComponent }.sorted()
     }
 }
@@ -1050,7 +1050,7 @@ private func undecodableRecordData(expiry: Date) -> Data {
 /// An expiry an hour before ``pinnedNow``, the instant every suite here pins the clock to, so the
 /// entry is expired on the sweep that follows without anything having to wait.
 private func expiredAnHourAgo() -> Expiry {
-    .custom(pinnedNow.addingTimeInterval(-3600))
+    .at(pinnedNow.addingTimeInterval(-3600))
 }
 
 /// Every regular file beneath `root`, as paths relative to it. Directories are excluded, so an

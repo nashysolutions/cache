@@ -15,31 +15,31 @@ import DependenciesTestSupport
 @Suite("Volatile Cache Tests", .dependency(\.date.now, pinnedNow))
 struct VolatileCacheTests {
 
-    @Test("Remove a stashed item")
+    @Test("Remove an item that was set")
     func testRemove() async throws {
         let cache = VolatileCache<TestValue>()
         let item = TestValue(count: "123")
         let identifier = item.id
 
-        try await cache.stash(item, duration: .short)
-        try await cache.removeResource(for: identifier)
+        try await cache.setItem(item, expiry: .short)
+        try await cache.removeItem(for: identifier)
 
-        let resource = try await cache.resource(for: identifier)
+        let resource = try await cache.item(for: identifier)
         #expect(resource == nil)
     }
 
-    @Test("Reset clears all cached resources")
-    func testReset() async throws {
+    @Test("removeAll() clears all cached items")
+    func testRemoveAll() async throws {
         let cache = VolatileCache<TestValue>()
         let item1 = TestValue(count: "123")
         let item2 = TestValue(count: "456")
 
-        try await cache.stash(item1, duration: .short)
-        try await cache.stash(item2, duration: .short)
-        try await cache.reset()
+        try await cache.setItem(item1, expiry: .short)
+        try await cache.setItem(item2, expiry: .short)
+        try await cache.removeAll()
 
-        let resource1 = try await cache.resource(for: item1.id)
-        let resource2 = try await cache.resource(for: item2.id)
+        let resource1 = try await cache.item(for: item1.id)
+        let resource2 = try await cache.item(for: item2.id)
         #expect(resource1 == nil)
         #expect(resource2 == nil)
     }
@@ -48,69 +48,69 @@ struct VolatileCacheTests {
     func testResourceFetchNonExisting() async throws {
         let cache = VolatileCache<TestValue>()
         let identifier = TestValue(count: "123").id
-        let resource = try await cache.resource(for: identifier)
+        let resource = try await cache.item(for: identifier)
         #expect(resource == nil)
     }
 
-    /// Pins replace semantics: a second stash under an identifier the cache already holds
+    /// Pins replace semantics: setting a second item under an identifier the cache already holds
     /// replaces the first, rather than being ignored.
     ///
     /// The two documents share an identifier and differ only in their body, so the read can tell
-    /// "the second stash won" from "the first stash was kept". ``TestValue`` cannot do this,
+    /// "the second item won" from "the first item was kept". ``TestValue`` cannot do this,
     /// because its identifier is its only field.
-    @Test("A second stash under the same identifier replaces the first")
-    func secondStashUnderSameIdentifierReplacesTheFirst() async throws {
+    @Test("A second item set under the same identifier replaces the first")
+    func secondItemUnderSameIdentifierReplacesTheFirst() async throws {
         let cache = VolatileCache<TestDocument>()
         let first = TestDocument(id: "1", body: "first draft")
         let second = TestDocument(id: "1", body: "second draft")
 
-        try await cache.stash(first, duration: .long)
-        try await cache.stash(second, duration: .long)
+        try await cache.setItem(first, expiry: .long)
+        try await cache.setItem(second, expiry: .long)
 
-        #expect(try await cache.resource(for: "1") == second)
+        #expect(try await cache.item(for: "1") == second)
     }
 
-    @Test("Resource is not expired before custom duration")
-    func testResourceIsNotExpiredBeforeCustomDuration() async throws {
-        // Given: A short custom expiry (2 seconds from now)
+    @Test("An item is served before its absolute expiry")
+    func testItemIsServedBeforeItsAbsoluteExpiry() async throws {
+        // Given: An absolute expiry 2 seconds after the pinned time
         let cache = VolatileCache<TestValue>()
         let item = TestValue(count: "123")
         let identifier = item.id
-        let expiry = Expiry.custom(pinnedNow.addingTimeInterval(2))
+        let expiry = Expiry.at(pinnedNow.addingTimeInterval(2))
 
-        try await cache.stash(item, duration: expiry)
+        try await cache.setItem(item, expiry: expiry)
 
-        // Then: The resource should not be expired, and should be the item that was stashed
-        let resource = try await cache.resource(for: identifier)
+        // Then: The entry should not be expired, and should be the item that was set
+        let resource = try await cache.item(for: identifier)
         #expect(resource == item)
     }
 
-    @Test("Resource is expired after custom duration")
-    func testResourceIsExpiredAfterCustomDuration() async throws {
-        // Given: A short custom expiry (1 second from now)
+    @Test("An item is not served after its absolute expiry")
+    func testItemIsNotServedAfterItsAbsoluteExpiry() async throws {
+        // Given: An absolute expiry 1 second before the pinned time
         let cache = VolatileCache<TestValue>()
         let item = TestValue(count: "123")
         let identifier = item.id
-        let expiry = Expiry.custom(pinnedNow.addingTimeInterval(-1))
+        let expiry = Expiry.at(pinnedNow.addingTimeInterval(-1))
 
-        try await cache.stash(item, duration: expiry)
+        try await cache.setItem(item, expiry: expiry)
 
         // Then: The resource should be expired and unavailable
-        let resource = try await cache.resource(for: identifier)
+        let resource = try await cache.item(for: identifier)
         #expect(resource == nil)
     }
 
     @Test("removeExpired() removes the expired entries, keeps the rest, and reports how many went")
     func removeExpiredRemovesOnlyExpiredEntries() async throws {
         let cache = VolatileCache<TestValue>()
-        try await cache.stash(TestValue(count: "expired-a"), duration: .custom(pinnedNow.addingTimeInterval(-1)))
-        try await cache.stash(TestValue(count: "expired-b"), duration: .custom(pinnedNow.addingTimeInterval(-3600)))
-        try await cache.stash(TestValue(count: "live"), duration: .custom(pinnedNow.addingTimeInterval(3600)))
+        try await cache.setItem(TestValue(count: "expired-a"), expiry: .at(pinnedNow.addingTimeInterval(-1)))
+        try await cache.setItem(TestValue(count: "expired-b"), expiry: .at(pinnedNow.addingTimeInterval(-3600)))
+        try await cache.setItem(TestValue(count: "live"), expiry: .at(pinnedNow.addingTimeInterval(3600)))
 
         let removed = try await cache.removeExpired()
 
         #expect(removed == 2)
-        #expect(try await cache.resource(for: "live")?.count == "live")
+        #expect(try await cache.item(for: "live")?.count == "live")
     }
 
     /// A read cannot show that the sweep removed an expired entry, because a read reports `nil`
@@ -119,7 +119,7 @@ struct VolatileCacheTests {
     @Test("removeExpired() removes what it counts: a second sweep finds nothing")
     func secondSweepFindsNothing() async throws {
         let cache = VolatileCache<TestValue>()
-        try await cache.stash(TestValue(count: "expired"), duration: .custom(pinnedNow.addingTimeInterval(-1)))
+        try await cache.setItem(TestValue(count: "expired"), expiry: .at(pinnedNow.addingTimeInterval(-1)))
 
         #expect(try await cache.removeExpired() == 1)
         #expect(try await cache.removeExpired() == 0)
@@ -128,12 +128,12 @@ struct VolatileCacheTests {
     @Test("removeExpired() reports zero when nothing has expired, and keeps everything")
     func removeExpiredWithNothingExpiredReportsZero() async throws {
         let cache = VolatileCache<TestValue>()
-        try await cache.stash(TestValue(count: "1"), duration: .long)
-        try await cache.stash(TestValue(count: "2"), duration: .long)
+        try await cache.setItem(TestValue(count: "1"), expiry: .long)
+        try await cache.setItem(TestValue(count: "2"), expiry: .long)
 
         #expect(try await cache.removeExpired() == 0)
-        #expect(try await cache.resource(for: "1")?.count == "1")
-        #expect(try await cache.resource(for: "2")?.count == "2")
+        #expect(try await cache.item(for: "1")?.count == "1")
+        #expect(try await cache.item(for: "2")?.count == "2")
     }
 
     @Test("removeExpired() reports zero on an empty cache")

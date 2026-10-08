@@ -19,7 +19,7 @@ import FoundationDependencies
 /// `TestDependencyKey`, so it has a `testValue` and no `liveValue`. Reading it from a live
 /// context therefore resolved to `testValue`, which is a mock whose `saveResource` does nothing.
 /// A consumer who had not written the dependency boilerplate got a cache that reported every
-/// `stash` as a success and wrote nothing, and the only diagnostic was a `swift-dependencies`
+/// write as a success and wrote nothing, and the only diagnostic was a `swift-dependencies`
 /// runtime warning that a Release build does not surface.
 ///
 /// ## Why the conformance is retroactive
@@ -51,7 +51,7 @@ import FoundationDependencies
 ///   `liveValue`, but `TestDependencyKey` supplies one that returns `testValue`, and the latter
 ///   is the one already witnessed. `swift-dependencies` documents the rule on `DependencyKey`:
 ///   a `previewValue` must be provided in the same module as the `TestDependencyKey` conformance.
-///   Measured on this branch: in a `.preview` context a stash succeeds, the read reports `nil`,
+///   Measured on this branch: in a `.preview` context a write succeeds, the read reports `nil`,
 ///   and no directory is created.
 ///
 /// The preview case is worth stating separately because a preview is a developer surface, not a
@@ -74,7 +74,7 @@ extension FileSystemResourceClientKey: @retroactive DependencyKey {
     /// a cache is constructed can stop being writable afterwards, so a check at construction
     /// would be a guarantee this package cannot keep.
     ///
-    /// It also keeps the reporting rule that ``FileSystemCache/resource(for:)`` already follows.
+    /// It also keeps the reporting rule that ``FileSystemCache/item(for:)`` already follows.
     /// A miss reports `nil` and an entry that no longer decodes reports `nil`, because neither is
     /// a fault. A cache directory that cannot be created is a fault, so it throws, and so is one
     /// that exists but cannot be searched: an identifier this cache cannot look for is not the

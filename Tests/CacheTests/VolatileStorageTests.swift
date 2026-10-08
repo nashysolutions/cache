@@ -12,7 +12,7 @@ import Foundation
 
 /// Exercises the in-memory sweep at the storage layer, where the instant is a parameter.
 ///
-/// The cache-level tests can only stash entries that are already expired and count what the sweep
+/// The cache-level tests can only set entries that are already expired and count what the sweep
 /// reports. Here the moment is chosen outright, nothing reads the wall clock, and the storage's own
 /// lookup, which does not filter by expiry, shows what is actually left.
 @Suite("VolatileStorage expired-entry sweep")

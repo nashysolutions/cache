@@ -47,10 +47,10 @@ struct IdentifierTypeTests {
         let cache = VolatileCache<UUIDKeyedItem>()
         let item = UUIDKeyedItem(id: UUID(), name: "Brie")
 
-        try await cache.stash(item, duration: .long)
+        try await cache.setItem(item, expiry: .long)
 
-        #expect(try await cache.resource(for: item.id) == item)
-        #expect(try await cache.resource(for: UUID()) == nil)
+        #expect(try await cache.item(for: item.id) == item)
+        #expect(try await cache.item(for: UUID()) == nil)
     }
 
     @Test("An Int-keyed item still round-trips through VolatileCache")
@@ -59,10 +59,10 @@ struct IdentifierTypeTests {
         let cache = VolatileCache<IntKeyedItem>()
         let item = IntKeyedItem(id: 1, name: "Brie")
 
-        try await cache.stash(item, duration: .long)
+        try await cache.setItem(item, expiry: .long)
 
-        #expect(try await cache.resource(for: 1) == item)
-        #expect(try await cache.resource(for: 2) == nil)
+        #expect(try await cache.item(for: 1) == item)
+        #expect(try await cache.item(for: 2) == nil)
     }
 
     // MARK: - FileSystemCache
@@ -78,12 +78,12 @@ struct IdentifierTypeTests {
 
         let item = UUIDKeyedItem(id: UUID(), name: "Brie")
 
-        try await makeCache(UUIDKeyedItem.self, root: root).stash(item, duration: .long)
+        try await makeCache(UUIDKeyedItem.self, root: root).setItem(item, expiry: .long)
 
         let relaunched = makeCache(UUIDKeyedItem.self, root: root)
 
-        #expect(try await relaunched.resource(for: item.id) == item)
-        #expect(try await relaunched.resource(for: UUID()) == nil)
+        #expect(try await relaunched.item(for: item.id) == item)
+        #expect(try await relaunched.item(for: UUID()) == nil)
         #expect(entryPaths(under: root).count == 1)
     }
 
@@ -95,12 +95,12 @@ struct IdentifierTypeTests {
 
         let item = IntKeyedItem(id: 1, name: "Brie")
 
-        try await makeCache(IntKeyedItem.self, root: root).stash(item, duration: .long)
+        try await makeCache(IntKeyedItem.self, root: root).setItem(item, expiry: .long)
 
         let relaunched = makeCache(IntKeyedItem.self, root: root)
 
-        #expect(try await relaunched.resource(for: 1) == item)
-        #expect(try await relaunched.resource(for: 2) == nil)
+        #expect(try await relaunched.item(for: 1) == item)
+        #expect(try await relaunched.item(for: 2) == nil)
     }
 
     /// Mirrors "An entry is written to the documented path" for a `UUID` identifier.
@@ -119,7 +119,7 @@ struct IdentifierTypeTests {
         let identifier = try #require(UUID(uuidString: text))
 
         let cache = makeCache(UUIDKeyedItem.self, root: root, subfolder: "shared")
-        try await cache.stash(UUIDKeyedItem(id: identifier, name: "Brie"), duration: .long)
+        try await cache.setItem(UUIDKeyedItem(id: identifier, name: "Brie"), expiry: .long)
 
         let type = hexDigest(of: String(reflecting: UUIDKeyedItem.self))
         let digest = hexDigest(of: text)

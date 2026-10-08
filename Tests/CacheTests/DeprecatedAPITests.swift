@@ -9,6 +9,7 @@ import Testing
 import Foundation
 import Dependencies
 import DependenciesTestSupport
+import FoundationDependencies
 import Files
 
 import Cache
@@ -17,12 +18,16 @@ import Cache
 ///
 /// 6.0.0 made `Resource` and `CodableResource` public, its `Cache` protocol had no
 /// `removeExpired()` requirement, and `FileSystemCache`'s initialiser took a `FileSystemDirectory`.
+/// It also named four operations differently: `stash(_:duration:)`, `resource(for:)`,
+/// `removeResource(for:)` and `reset()`, which are now `setItem(_:expiry:)`, `item(for:)`,
+/// `removeItem(for:)` and `removeAll()`, and `Expiry.custom(_:)`, which is now `Expiry.at(_:)`.
 /// Each test below is written the way a 6.0.0 consumer wrote it, so much of the suite's value is
 /// that it compiles. Were a shim removed, or its shape changed, this file would stop building.
 ///
 /// The import is deliberately not `@testable`: a consumer sees only the public surface, and the
 /// package's own internal types must not stand in for the shims here. `Files` is imported because
 /// a 6.0.0 consumer that held a `FileSystemDirectory` value had to import it to name the type.
+/// `FoundationDependencies` is imported to point a file-backed cache at a sandbox.
 ///
 /// The build reports a deprecation warning for each use of a shim below. Those are the warnings a
 /// 6.0.0 consumer sees, and they are expected. They cannot be silenced by marking this suite
@@ -141,6 +146,111 @@ struct DeprecatedAPITests {
         try await unscoped.stash(TestDocument(id: "1", body: "body"), duration: .long)
         try await scoped.stash(TestDocument(id: "1", body: "body"), duration: .long)
     }
+
+    /// Each 6.0.0 name must do what its 7.0.0 name does on both package caches, which implement
+    /// only the new names. Every step is read back through a new name, so a shim that did nothing,
+    /// or that dropped its expiry, fails a step: an item set through `stash` with an expiry already
+    /// past must not be served, which a shim that substituted a preset would serve.
+    @Test(
+        "Each 6.0.0 name does what its 7.0.0 name does on a package cache",
+        .dependency(\.date.now, pinnedNow),
+        arguments: Backend.allCases
+    )
+    func oldNamesDoWhatTheNewNamesDo(backend: Backend) async throws {
+
+        let root = FileManager.default.temporaryDirectory
+            .appending(component: "cache-deprecated-api-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .standardizedFileURL
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        switch backend {
+        case .volatile:
+            try await callEachOldName(on: VolatileCache<TestDocument>())
+        case .fileSystem:
+            let cache = withDependencies {
+                $0.fileSystemResourceClient = FileSystemResourceClient { directory, folder in
+                    try FileSystemFolderStore(agent: SandboxAgent(root: root), kind: directory, subfolder: folder)
+                }
+            } operation: {
+                FileSystemCache<TestDocument>(.documents, subfolder: nil)
+            }
+            try await callEachOldName(on: cache)
+        }
+    }
+
+    /// A conformance written against 6.0.0 implements the old names and none of the new ones. Code
+    /// written against 7.0.0 calls the new names, and must reach that conformance's own
+    /// implementations, with the arguments it was given. The conformance records the expiry it
+    /// receives, so a default that forwarded a different one fails here.
+    @Test("A 6.0.0 conformance is reached through the 7.0.0 names")
+    func sixPointZeroConformanceIsReachedThroughTheNewNames() async throws {
+
+        let cache = SixPointZeroCache()
+        let brie = TestValue(count: "brie")
+        let cheddar = TestValue(count: "cheddar")
+
+        try await setItem(brie, expiry: .after(.seconds(90)), in: cache)
+        #expect(try await item(for: brie.id, in: cache) == brie)
+        #expect(await cache.store.expiry(for: brie.id) == .after(.seconds(90)))
+
+        try await removeItem(for: brie.id, in: cache)
+        #expect(try await item(for: brie.id, in: cache) == nil)
+
+        try await setItem(brie, expiry: .long, in: cache)
+        try await setItem(cheddar, expiry: .long, in: cache)
+        try await removeAll(in: cache)
+        #expect(try await item(for: brie.id, in: cache) == nil)
+        #expect(try await item(for: cheddar.id, in: cache) == nil)
+    }
+
+    @Test("Expiry.custom(_:) builds the same expiry as Expiry.at(_:)")
+    func customIsAt() {
+
+        let date = Date(timeIntervalSinceReferenceDate: 1_000_000)
+
+        #expect(Expiry.custom(date) == .at(date))
+        #expect(Expiry.custom(date) != .at(date.addingTimeInterval(1)))
+    }
+
+    /// `.short`, `.medium` and `.long` were cases in 6.0.0, and are presets now. Code that names
+    /// one must get the length 6.0.0 documented for it.
+    @Test("The presets are the lengths 6.0.0 documented")
+    func presetsKeepTheirLengths() {
+        #expect(Expiry.short == .after(.seconds(60)))
+        #expect(Expiry.medium == .after(.seconds(180)))
+        #expect(Expiry.long == .after(.seconds(3600)))
+    }
+}
+
+/// Calls each 6.0.0 name on a cache that implements only the 7.0.0 names, and reads every result
+/// back through a 7.0.0 name.
+///
+/// On both package caches each old name is satisfied by its default in Deprecated.swift, so a call
+/// here reaches the same function a call on the concrete type does.
+private func callEachOldName<C: Cache>(on cache: C) async throws where C.Item == TestDocument {
+
+    let brie = TestDocument(id: "brie", body: "brie")
+    let cheddar = TestDocument(id: "cheddar", body: "cheddar")
+    let expired = TestDocument(id: "expired", body: "expired")
+
+    try await cache.stash(brie, duration: .long)
+    #expect(try await cache.item(for: brie.id) == brie)
+
+    try await cache.stash(expired, duration: .custom(pinnedNow.addingTimeInterval(-1)))
+    #expect(try await cache.item(for: expired.id) == nil)
+
+    #expect(try await cache.resource(for: brie.id) == brie)
+    #expect(try await cache.resource(for: "never-set") == nil)
+
+    try await cache.removeResource(for: brie.id)
+    #expect(try await cache.item(for: brie.id) == nil)
+
+    try await cache.setItem(brie, expiry: .long)
+    try await cache.setItem(cheddar, expiry: .long)
+    try await cache.reset()
+    #expect(try await cache.item(for: brie.id) == nil)
+    #expect(try await cache.item(for: cheddar.id) == nil)
 }
 
 /// Sweeps any cache the way generic consumer code does, through the protocol requirement.
@@ -148,17 +258,75 @@ private func sweep<C: Cache>(_ cache: C) async throws -> Int {
     try await cache.removeExpired()
 }
 
-/// A conformance written against 6.0.0, whose `Cache` protocol had no `removeExpired()`.
+// Generic code written against 7.0.0, which calls each operation by its new name through the
+// protocol requirement, as code that accepts any `Cache` does.
+
+private func setItem<C: Cache>(_ item: C.Item, expiry: Expiry, in cache: C) async throws {
+    try await cache.setItem(item, expiry: expiry)
+}
+
+private func item<C: Cache>(for identifier: C.Item.ID, in cache: C) async throws -> C.Item? {
+    try await cache.item(for: identifier)
+}
+
+private func removeItem<C: Cache>(for identifier: C.Item.ID, in cache: C) async throws {
+    try await cache.removeItem(for: identifier)
+}
+
+private func removeAll<C: Cache>(in cache: C) async throws {
+    try await cache.removeAll()
+}
+
+/// A conformance written against 6.0.0, whose `Cache` protocol had no `removeExpired()` and named
+/// its operations `stash(_:duration:)`, `resource(for:)`, `removeResource(for:)` and `reset()`.
 ///
 /// It implements every requirement 6.0.0 had and nothing more, so it compiles only because of the
-/// default.
+/// defaults for `removeExpired()` and for the four 7.0.0 names. It keeps what it is given, and the
+/// expiry each item was given, so a caller of the new names can see its own implementations ran.
 private struct SixPointZeroCache: Cache {
 
-    func stash(_ item: TestValue, duration: Expiry) async throws {}
+    let store = SixPointZeroStore()
 
-    func removeResource(for identifier: TestValue.ID) async throws {}
+    func stash(_ item: TestValue, duration: Expiry) async throws {
+        await store.set(item, expiry: duration)
+    }
 
-    func resource(for identifier: TestValue.ID) async throws -> TestValue? { nil }
+    func removeResource(for identifier: TestValue.ID) async throws {
+        await store.remove(identifier)
+    }
 
-    func reset() async throws {}
+    func resource(for identifier: TestValue.ID) async throws -> TestValue? {
+        await store.item(for: identifier)
+    }
+
+    func reset() async throws {
+        await store.removeAll()
+    }
+}
+
+/// The storage behind ``SixPointZeroCache``. Expiry is recorded, not enforced: the test is about
+/// which implementation a call reaches, not about when an entry expires.
+private actor SixPointZeroStore {
+
+    private var entries: [TestValue.ID: (item: TestValue, expiry: Expiry)] = [:]
+
+    func set(_ item: TestValue, expiry: Expiry) {
+        entries[item.id] = (item, expiry)
+    }
+
+    func remove(_ identifier: TestValue.ID) {
+        entries[identifier] = nil
+    }
+
+    func item(for identifier: TestValue.ID) -> TestValue? {
+        entries[identifier]?.item
+    }
+
+    func expiry(for identifier: TestValue.ID) -> Expiry? {
+        entries[identifier]?.expiry
+    }
+
+    func removeAll() {
+        entries.removeAll()
+    }
 }

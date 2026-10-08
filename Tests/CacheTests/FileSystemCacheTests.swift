@@ -45,7 +45,7 @@ struct FileSystemCacheTests {
         }
 
         // When: removing a resource with ID 5
-        try await cache.removeResource(for: "5")
+        try await cache.removeItem(for: "5")
 
         // Then: the entry is deleted, and nothing reads it, and nothing asks whether it is there
         #expect(folderStore.agent.called == [.deleteLocation])

@@ -133,9 +133,9 @@ struct SubfolderContainmentTests {
         let cache = sandbox.makeCache(subfolder: subfolder)
         let before = sandbox.itemsOutsideBase()
 
-        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+        try await cache.setItem(CodableTestValue(count: "1"), expiry: .long)
 
-        #expect(try await cache.resource(for: "1")?.count == "1")
+        #expect(try await cache.item(for: "1")?.count == "1")
         #expect(regularFiles(under: sandbox.base) == ["\(prefix)\(entryPath(for: "1"))"])
         #expect(sandbox.itemsOutsideBase() == before)
     }
@@ -153,9 +153,9 @@ struct SubfolderContainmentTests {
         let absolute = sandbox.outside.appending(component: "x").path
         let cache = sandbox.makeCache(subfolder: absolute)
 
-        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+        try await cache.setItem(CodableTestValue(count: "1"), expiry: .long)
 
-        #expect(try await cache.resource(for: "1")?.count == "1")
+        #expect(try await cache.item(for: "1")?.count == "1")
         #expect(regularFiles(under: sandbox.outside).isEmpty)
 
         let written = regularFiles(under: sandbox.base)
@@ -177,9 +177,9 @@ struct SubfolderContainmentTests {
 
         let cache = sandbox.makeCache(subfolder: "alias")
 
-        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+        try await cache.setItem(CodableTestValue(count: "1"), expiry: .long)
 
-        #expect(try await cache.resource(for: "1")?.count == "1")
+        #expect(try await cache.item(for: "1")?.count == "1")
         #expect(regularFiles(under: sandbox.base) == ["inner/\(entryPath(for: "1"))"])
     }
 }
@@ -197,10 +197,10 @@ private func expectRefused(
     let before = sandbox.allItems()
 
     let operations: [(String, () async throws -> Void)] = [
-        ("stash", { try await cache.stash(CodableTestValue(count: "1"), duration: .long) }),
-        ("resource(for:)", { _ = try await cache.resource(for: "1") }),
-        ("removeResource(for:)", { try await cache.removeResource(for: "1") }),
-        ("reset()", { try await cache.reset() }),
+        ("setItem(_:expiry:)", { try await cache.setItem(CodableTestValue(count: "1"), expiry: .long) }),
+        ("item(for:)", { _ = try await cache.item(for: "1") }),
+        ("removeItem(for:)", { try await cache.removeItem(for: "1") }),
+        ("removeAll()", { try await cache.removeAll() }),
         ("removeExpired()", { try await cache.removeExpired() })
     ]
 
