@@ -74,3 +74,9 @@ try await cache.stash(
 
 let cheese = try await cache.resource(for: "123")
 ```
+
+---
+
+## Versioning
+
+Cache follows [Semantic Versioning](https://semver.org). A public symbol that is renamed or removed is deprecated in a minor release first, and removed only in the next major. CI fails a pull request that breaks the public API unless it carries the `breaking` label. The full policy is in [CONTRIBUTING.md](CONTRIBUTING.md#versioning-policy).
