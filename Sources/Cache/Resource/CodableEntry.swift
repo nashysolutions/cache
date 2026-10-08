@@ -11,6 +11,9 @@ import Foundation
 ///
 /// `CodableEntry` is designed for use in persistent or serialisable storage contexts, such as
 /// file system or database-backed caches.
+///
+/// It is unrelated to the public, deprecated ``CodableResource``, which is kept only so that code
+/// written against 6.0.0 still compiles, and which nothing in the package stores.
 struct CodableEntry<Item: Identifiable & Codable & Sendable>: Sendable, ExpiringResource, Codable {
 
     /// The wrapped codable item associated with this entry.
