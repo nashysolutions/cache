@@ -1,0 +1,101 @@
+# Fails a pull request that breaks the package's public API, unless the pull
+# request carries the `breaking` label. The label is the recorded ruling that
+# the break belongs in the next major release. The policy it enforces is in
+# CONTRIBUTING.md.
+#
+# The baseline is the commit the pull request merges into, not the latest
+# release tag. Against the tag, every break already on main since that release
+# is reported again on every pull request, so every pull request would need
+# the label until the next major is tagged, and the label would stop saying
+# anything about the pull request it is on. Against its merge base, a pull
+# request is reported only for the breaks it introduces.
+#
+# This is a separate workflow from ci.yml because it has to run again when a
+# label is added or removed, and the build and test jobs do not. Re-running an
+# earlier run reuses the labels that run started with, so after changing the
+# label, read the run the label change started.
+#
+# Like ci.yml, no dependency or build cache, and the runner image is pinned.
+
+name: API breaking changes
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-breaking-changes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  diagnose:
+    name: swift package diagnose-api-breaking-changes
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      # The baseline is built from this repository's own history, so a shallow
+      # checkout would leave the merge base unreachable.
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Record the toolchain this run used
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      - name: Resolve the baseline
+        id: baseline
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          echo "shallow: $(git rev-parse --is-shallow-repository)"
+          sha=$(git merge-base HEAD "origin/$BASE_REF")
+          git log -1 --format='baseline: %H %s' "$sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      # A failed comparison, such as a baseline that does not build, has no
+      # result for the label to rule on, so it fails whether or not the label
+      # is present. Only a completed comparison that reports breaks can be
+      # let through by the label.
+      - name: Diagnose API breaking changes
+        env:
+          BASELINE: ${{ steps.baseline.outputs.sha }}
+          LABELLED: ${{ contains(github.event.pull_request.labels.*.name, 'breaking') }}
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/diagnose.log"
+          status=0
+          swift package diagnose-api-breaking-changes "$BASELINE" > "$log" 2>&1 || status=$?
+          cat "$log"
+
+          {
+            echo "### API breaking changes against \`${BASELINE:0:7}\`"
+            echo '```'
+            grep -E '^(No breaking changes detected|[0-9]+ breaking changes? detected|  .*API breakage)' "$log" || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$status" -eq 0 ] && grep -q 'No breaking changes detected' "$log"; then
+            echo "No API breaking changes against $BASELINE."
+            exit 0
+          fi
+
+          if ! grep -Eq '[0-9]+ breaking changes? detected' "$log"; then
+            echo "::error::diagnose-api-breaking-changes exited $status without completing the comparison."
+            exit 1
+          fi
+
+          if [ "$LABELLED" = "true" ]; then
+            echo "::warning::This pull request breaks the public API and carries the breaking label, so it is ruled for the next major release."
+            exit 0
+          fi
+
+          echo "::error::This pull request breaks the public API. Keep the old API as a deprecated shim (see CONTRIBUTING.md), or add the breaking label to rule the change for the next major release."
+          exit 1
