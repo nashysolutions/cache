@@ -137,7 +137,7 @@ extension Cache {
     }
 }
 
-// The four operations 7.0.0 renamed. Every name, old and new, is a requirement of `Cache`, and
+// The operations 7.0.0 renamed. Every name, old and new, is a requirement of `Cache`, and
 // each has a default here that calls its counterpart: an old name calls its new name, and a new
 // name calls its old one. So a caller of either name reaches a conformance that implements
 // either, which keeps 6.0.0 callers, 6.0.0 conformances and test doubles compiling, with a
@@ -208,13 +208,14 @@ extension Cache {
     ///
     /// - Warning: A conformance that implements neither this method nor `stash(_:duration:)`
     ///   also compiles with only that warning, and then each default calls the other, so the
-    ///   first call recurses until the stack overflows.
+    ///   first call never returns. It does not crash: an async call keeps its frames on the heap,
+    ///   not the thread's stack, so memory grows until the system terminates the process.
     ///
     /// - Parameters:
     ///   - item: The item to be stored in the cache.
     ///   - expiry: When the entry stops being served.
     /// - Throws: Whatever the conformance's `stash(_:duration:)` throws.
-    @available(*, deprecated, message: "Implement setItem(_:expiry:) in this conformance. The default calls stash(_:duration:), and it is removed in 8.0.0.")
+    @available(*, deprecated, message: "This conformance implements stash(_:duration:), the 6.0.0 name, and not setItem(_:expiry:). Its author should implement setItem(_:expiry:). If it implements neither, a call never returns. This default is removed in 8.0.0.")
     public func setItem(_ item: Item, expiry: Expiry) async throws {
         try await stash(item, duration: expiry)
     }
@@ -227,11 +228,12 @@ extension Cache {
     ///
     /// - Warning: A conformance that implements neither this method nor `removeResource(for:)`
     ///   also compiles with only that warning, and then each default calls the other, so the
-    ///   first call recurses until the stack overflows.
+    ///   first call never returns. It does not crash: an async call keeps its frames on the heap,
+    ///   not the thread's stack, so memory grows until the system terminates the process.
     ///
     /// - Parameter identifier: The identifier of the item to remove.
     /// - Throws: Whatever the conformance's `removeResource(for:)` throws.
-    @available(*, deprecated, message: "Implement removeItem(for:) in this conformance. The default calls removeResource(for:), and it is removed in 8.0.0.")
+    @available(*, deprecated, message: "This conformance implements removeResource(for:), the 6.0.0 name, and not removeItem(for:). Its author should implement removeItem(for:). If it implements neither, a call never returns. This default is removed in 8.0.0.")
     public func removeItem(for identifier: Item.ID) async throws {
         try await removeResource(for: identifier)
     }
@@ -244,12 +246,13 @@ extension Cache {
     ///
     /// - Warning: A conformance that implements neither this method nor `resource(for:)` also
     ///   compiles with only that warning, and then each default calls the other, so the first
-    ///   call recurses until the stack overflows.
+    ///   call never returns. It does not crash: an async call keeps its frames on the heap, not
+    ///   the thread's stack, so memory grows until the system terminates the process.
     ///
     /// - Parameter identifier: The identifier of the item to retrieve.
     /// - Returns: Whatever the conformance's `resource(for:)` returns.
     /// - Throws: Whatever the conformance's `resource(for:)` throws.
-    @available(*, deprecated, message: "Implement item(for:) in this conformance. The default calls resource(for:), and it is removed in 8.0.0.")
+    @available(*, deprecated, message: "This conformance implements resource(for:), the 6.0.0 name, and not item(for:). Its author should implement item(for:). If it implements neither, a call never returns. This default is removed in 8.0.0.")
     public func item(for identifier: Item.ID) async throws -> Item? {
         try await resource(for: identifier)
     }
@@ -261,11 +264,12 @@ extension Cache {
     /// conformance gets a warning at compile time that names the method to implement.
     ///
     /// - Warning: A conformance that implements neither this method nor `reset()` also compiles
-    ///   with only that warning, and then each default calls the other, so the first call
-    ///   recurses until the stack overflows.
+    ///   with only that warning, and then each default calls the other, so the first call never
+    ///   returns. It does not crash: an async call keeps its frames on the heap, not the thread's
+    ///   stack, so memory grows until the system terminates the process.
     ///
     /// - Throws: Whatever the conformance's `reset()` throws.
-    @available(*, deprecated, message: "Implement removeAll() in this conformance. The default calls reset(), and it is removed in 8.0.0.")
+    @available(*, deprecated, message: "This conformance implements reset(), the 6.0.0 name, and not removeAll(). Its author should implement removeAll(). If it implements neither, a call never returns. This default is removed in 8.0.0.")
     public func removeAll() async throws {
         try await reset()
     }

@@ -13,9 +13,10 @@ import Foundation
 /// item is set, and ``at(_:)`` names the instant outright. ``short``, ``medium`` and ``long`` are
 /// presets of ``after(_:)``.
 ///
-/// The moment an item is set is the time the cache reads from `@Dependency(\.date)` when
-/// ``Cache/setItem(_:expiry:)`` is called, so a test that pins that time governs every relative
-/// expiry. An entry is served up to and including the instant it expires, and not after it.
+/// In ``VolatileCache`` and ``FileSystemCache``, the moment an item is set is the time the cache
+/// reads from `@Dependency(\.date)` when ``Cache/setItem(_:expiry:)`` is called, so a test that
+/// pins that time governs every relative expiry. A conformance of your own decides where its time
+/// comes from. An entry is served up to and including the instant it expires, and not after it.
 ///
 /// Two expiries are equal when they state the same policy, not when they would resolve to the
 /// same instant: `.after(.seconds(60))` equals `.after(.milliseconds(60_000))`, and never equals
@@ -64,14 +65,13 @@ public enum Expiry: Sendable, Hashable {
 
 private extension Duration {
 
-    /// The duration in seconds, the unit `Date` adds.
+    /// The duration as a `TimeInterval`, for `Date.addingTimeInterval(_:)`.
     ///
-    /// The standard library has no conversion from `Duration` to `TimeInterval`, so this adds the
-    /// two components a `Duration` is stored as: whole seconds, and attoseconds (10⁻¹⁸ of a second)
-    /// on top of them. Their sum is a `Double`, as the interval a `Date` stores is, so it is as
-    /// precise as the `Date` it is added to.
+    /// The standard library has no conversion from `Duration` to `TimeInterval`. Dividing by one
+    /// second converts every `Duration`. Adding up its `components` instead would trap once the
+    /// whole seconds exceed `Int64.max`, which a `Duration` can hold. A `Date` is itself a
+    /// `Double` interval, so the conversion loses no precision the `Date` would keep.
     var timeInterval: TimeInterval {
-        let (seconds, attoseconds) = components
-        return TimeInterval(seconds) + TimeInterval(attoseconds) / 1e18
+        self / .seconds(1)
     }
 }

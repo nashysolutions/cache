@@ -209,6 +209,15 @@ implement. Two things stop compiling: a pattern such as `case .custom(let date)`
 `.at` instead, and a `switch` over ``Expiry`` that lists the four 6.0.0 cases, which covers
 `.after` and `.at` instead.
 
+Check a `Cache` conformance of your own for a method that already has the signature of a new
+name, such as a helper `func removeAll() async`. That method now implements the requirement. If
+it is less visible than the type, the conformance stops compiling. If it is not, it compiles with
+no warning, and a caller of the new name reaches that method instead of your implementation of the
+old name. Rename the method.
+
+If you declared ``Expiry`` `Equatable` or `Hashable` yourself, delete that conformance. ``Expiry``
+is now `Hashable`, and yours produces a warning.
+
 Earlier versions of this article asked you to write a `FileSystemContext` and two `@retroactive
 DependencyKey` conformances by hand. That is no longer needed, and the conformance for
 `FileSystemResourceClientKey` is now declared by this package, so a copy of it in your own code is

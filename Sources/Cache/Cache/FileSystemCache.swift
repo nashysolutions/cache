@@ -84,7 +84,7 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
     /// directory; it does not stop it naming a different folder inside it.
     ///
     /// - Parameters:
-    ///   - directory: The root directory in which resources will be stored.
+    ///   - directory: The root directory in which entries are stored.
     ///   - subfolder: An optional path below `directory` used to scope the cache contents.
     ///     Defaults to `nil`.
     public init(

@@ -194,8 +194,10 @@ struct DeprecatedAPITests {
         #expect(try await item(for: brie.id, in: cache) == brie)
         #expect(await cache.store.expiry(for: brie.id) == .after(.seconds(90)))
 
+        try await setItem(cheddar, expiry: .long, in: cache)
         try await removeItem(for: brie.id, in: cache)
         #expect(try await item(for: brie.id, in: cache) == nil)
+        #expect(try await item(for: cheddar.id, in: cache) == cheddar)
 
         try await setItem(brie, expiry: .long, in: cache)
         try await setItem(cheddar, expiry: .long, in: cache)
@@ -243,8 +245,10 @@ private func callEachOldName<C: Cache>(on cache: C) async throws where C.Item ==
     #expect(try await cache.resource(for: brie.id) == brie)
     #expect(try await cache.resource(for: "never-set") == nil)
 
+    try await cache.setItem(cheddar, expiry: .long)
     try await cache.removeResource(for: brie.id)
     #expect(try await cache.item(for: brie.id) == nil)
+    #expect(try await cache.item(for: cheddar.id) == cheddar)
 
     try await cache.setItem(brie, expiry: .long)
     try await cache.setItem(cheddar, expiry: .long)

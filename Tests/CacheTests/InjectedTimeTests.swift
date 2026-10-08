@@ -173,6 +173,28 @@ struct InjectedTimeTests {
         #expect(zeroServedJustAfter == nil)
         #expect(sweptAtOnce == 1)
     }
+
+    /// Pins that a duration of more than `Int64.max` whole seconds is accepted.
+    ///
+    /// A `Duration` can hold that many, but reading its `components` traps once the whole seconds
+    /// pass `Int64.max`. A conversion through them would crash the caller of `setItem(_:expiry:)`,
+    /// where this stores an entry that is still served.
+    @Test("A duration of more than Int64.max seconds is accepted, and served", arguments: Backend.allCases)
+    func durationBeyondInt64Seconds(backend: Backend) async throws {
+
+        let root = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let cache = makeCache(backend, root: root)
+        let lasting = TestDocument(id: "lasting", body: "lasting")
+
+        try await at(pinnedNow) {
+            try await cache.setItem(lasting, expiry: .after(.seconds(Int64.max) + .seconds(1)))
+        }
+        let served = try await at(pinnedNow) { try await cache.item(for: lasting.id) }
+
+        #expect(served == lasting)
+    }
 }
 
 // MARK: - Fixtures
@@ -198,9 +220,9 @@ struct Lifetime: Sendable, CustomTestStringConvertible {
 /// ``pinnedNow``.
 ///
 /// The fractional durations are there because a `Duration` keeps whole seconds and attoseconds
-/// apart. A conversion that dropped the attoseconds would put their deadline a whole number of
-/// seconds out, which the millisecond either side of it would catch, and the negative one does
-/// the same for a conversion that got the sign of either part wrong. The zero and negative
+/// apart. A conversion that dropped the attoseconds would truncate their deadline to a whole
+/// second, which the lookups a millisecond either side of it catch, and the negative one does the
+/// same for a conversion that got the sign of either part wrong. The zero and negative
 /// durations are also pinned at the moment of setting, by `durationsThatAreNotPositive`.
 private let lifetimes = [
     Lifetime(expiry: .short, seconds: 60, testDescription: ".short"),

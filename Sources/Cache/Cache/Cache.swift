@@ -16,10 +16,10 @@ import Foundation
 /// Conforming types are responsible for managing item expiry and storage lifecycle,
 /// and must not return expired items from the `item(for:)` method.
 ///
-/// A conformance implements ``setItem(_:expiry:)``, ``item(for:)``, ``removeItem(for:)``,
-/// ``removeAll()`` and ``removeExpired()``. The four requirements that 6.0.0 named differently are
-/// still declared, deprecated, so that code written against 6.0.0 keeps compiling. Each is
-/// satisfied by a default that calls its new name, so a conformance does not implement them.
+/// A conformance implements every requirement that is not deprecated. The requirements that 6.0.0
+/// named differently are still declared, deprecated, so that code written against 6.0.0 keeps
+/// compiling. Each is satisfied by a default that calls its new name, so a new conformance need
+/// not implement them.
 public protocol Cache<Item>: Sendable {
 
     /// The type of item being stored in the cache.
@@ -85,7 +85,7 @@ public protocol Cache<Item>: Sendable {
     // is deprecated as a requirement, not only as a default, because a requirement that is not
     // deprecated makes the compiler warn every conformance that implements only the new name, and
     // that warning could not be silenced. The defaults in both directions are in Deprecated.swift.
-    // These four requirements, and those defaults, are removed in 8.0.0.
+    // These requirements, and those defaults, are removed in 8.0.0.
 
     /// Stores an item under its identifier, replacing any entry already held for it.
     ///
