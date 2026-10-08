@@ -42,7 +42,8 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
 
     /// An optional subfolder under the base directory.
     ///
-    /// If specified, all resources will be scoped to this subfolder.
+    /// If specified, all resources will be scoped to this subfolder. One that resolves outside
+    /// the base directory is refused by every operation, as ``store`` describes.
     private let subfolder: String?
 
     /// Creates a new file system-backed storage instance with a filename strategy.
@@ -68,26 +69,42 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
     /// operations is recreated on the next one. iOS purges the caches directory under disk
     /// pressure, and a store held from construction would fail every write afterwards.
     ///
-    /// - Throws: An error if the store could not be created.
+    /// Before anything is created below the base directory, the folder is checked against it by
+    /// ``FileSystemContainment``, so a subfolder that resolves outside the base directory is
+    /// refused by every operation and creates nothing. The check is made here rather than in the
+    /// initialiser for two reasons: the initialiser touches no disk and cannot fail, and a link
+    /// that is not there when a cache is built can be there by the time it is used.
+    ///
+    /// - Throws: `CocoaError.fileWriteInvalidFileName` if the folder resolves outside the base
+    ///   directory, or another error if the store could not be created.
     private var store: any FileSystemOperations {
         get throws {
+            let base = try fileSystemResourceClient.makeStore(fileSystemDirectory, nil)
+            let folder = FileSystemLayout.typeScopedSubfolder(below: subfolder, for: Item.self)
+
+            try FileSystemContainment.verify(
+                folder: folder,
+                subfolder: subfolder,
+                below: base.folder.location
+            )
+
             // Each level of the path is created as a separate step. An agent whose
             // `createDirectory` does not create intermediate directories would otherwise fail to
             // create the folders below it.
-            _ = try fileSystemResourceClient.makeStore(
-                fileSystemDirectory,
-                subfolder
-            )
+            if let subfolder {
+                _ = try fileSystemResourceClient.makeStore(
+                    fileSystemDirectory,
+                    subfolder
+                )
+            }
 
             _ = try fileSystemResourceClient.makeStore(
                 fileSystemDirectory,
                 FileSystemLayout.versionedSubfolder(below: subfolder)
             )
 
-            return try fileSystemResourceClient.makeStore(
-                fileSystemDirectory,
-                FileSystemLayout.typeScopedSubfolder(below: subfolder, for: Item.self)
-            )
+            // The folder checked above, so that what was checked is what is used.
+            return try fileSystemResourceClient.makeStore(fileSystemDirectory, folder)
         }
     }
 
