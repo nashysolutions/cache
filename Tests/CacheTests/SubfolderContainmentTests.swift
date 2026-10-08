@@ -64,6 +64,22 @@ struct SubfolderContainmentTests {
         try await expectRefused(sandbox.makeCache(subfolder: subfolder), in: sandbox)
     }
 
+    /// A folder whose path merely begins with the base directory's path is beside it, not inside
+    /// it. Comparing the paths as strings would accept `<sandbox>/base-evil` as inside
+    /// `<sandbox>/base`; comparing them component by component does not.
+    @Test("A subfolder through a link to a sibling whose name begins with the base directory's is refused")
+    func subfolderThroughLinkToPrefixedSiblingIsRefused() async throws {
+
+        let sandbox = try Sandbox()
+        defer { sandbox.remove() }
+
+        let sibling = sandbox.root.appending(component: "base-evil", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: sibling, withIntermediateDirectories: true)
+        try sandbox.link("link", to: sibling)
+
+        try await expectRefused(sandbox.makeCache(subfolder: "link"), in: sandbox)
+    }
+
     /// The case that resolving the path as text gets wrong. `link/../x` reads as `<base>/x`, and
     /// the file system puts it beside the link's target, which is outside.
     @Test("`..` after a link that points outside is refused")
@@ -169,14 +185,16 @@ struct SubfolderContainmentTests {
 }
 
 /// Expects every operation on a cache to be refused with the containment error, and nothing to be
-/// created outside the base directory or written inside it.
+/// created anywhere in the sandbox: not outside the base directory, and not below it either, folders
+/// included. The base directory already exists, so the one thing an operation may create before
+/// it is refused, the base directory itself, is not created here.
 private func expectRefused(
     _ cache: FileSystemCache<CodableTestValue>,
     in sandbox: Sandbox,
     sourceLocation: SourceLocation = #_sourceLocation
 ) async throws {
 
-    let before = sandbox.itemsOutsideBase()
+    let before = sandbox.allItems()
 
     let operations: [(String, () async throws -> Void)] = [
         ("stash", { try await cache.stash(CodableTestValue(count: "1"), duration: .long) }),
@@ -200,8 +218,7 @@ private func expectRefused(
         )
     }
 
-    #expect(sandbox.itemsOutsideBase() == before, sourceLocation: sourceLocation)
-    #expect(regularFiles(under: sandbox.base).isEmpty, sourceLocation: sourceLocation)
+    #expect(sandbox.allItems() == before, sourceLocation: sourceLocation)
 }
 
 /// The path of an entry below its subfolder, spelled out here rather than read back from the
@@ -251,9 +268,9 @@ private struct Sandbox {
         }
     }
 
-    /// Every file, folder and link in the sandbox that is not inside the base directory, as paths
-    /// relative to the sandbox. Links are listed, not followed.
-    func itemsOutsideBase() -> Set<String> {
+    /// Every file, folder and link in the sandbox, as paths relative to it. Links are listed, not
+    /// followed.
+    func allItems() -> Set<String> {
         guard let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) else {
             return []
         }
@@ -263,13 +280,15 @@ private struct Sandbox {
 
         for case let url as URL in enumerator {
             let path = url.standardizedFileURL.path
-            let relative = path.hasPrefix(prefix) ? String(path.dropFirst(prefix.count)) : path
-            if relative != "base" && relative.hasPrefix("base/") == false {
-                paths.insert(relative)
-            }
+            paths.insert(path.hasPrefix(prefix) ? String(path.dropFirst(prefix.count)) : path)
         }
 
         return paths
+    }
+
+    /// Every file, folder and link in the sandbox that is not inside the base directory.
+    func itemsOutsideBase() -> Set<String> {
+        allItems().filter { $0 != "base" && $0.hasPrefix("base/") == false }
     }
 
     func remove() {
