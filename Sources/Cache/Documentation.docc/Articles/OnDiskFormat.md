@@ -16,7 +16,9 @@ An entry is written to:
 <base>/[<subfolder>/]cache-v2/<type>/<digest>.cache
 ```
 
-- `<base>` is the directory named by the `FileSystemDirectory` you pass to the initialiser.
+- `<base>` is the directory named by the ``CacheDirectory`` you pass to the initialiser. The
+  deprecated initialiser that takes a `FileSystemDirectory` resolves each case to the same
+  directory, so the layout does not depend on which initialiser built the cache.
 - `<subfolder>` is the optional subfolder you pass, and is omitted when it is `nil`. It may be
   nested, and it must stay inside `<base>`, as the next section describes.
 - `cache-v2` is chosen by this package and identifies the layout version.

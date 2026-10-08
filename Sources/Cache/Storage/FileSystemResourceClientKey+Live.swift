@@ -69,7 +69,7 @@ extension FileSystemResourceClientKey: @retroactive DependencyKey {
     /// folder that cannot be created surfaces as `FileManager`'s own error, and surfaces at the
     /// point of use rather than at construction of the cache.
     ///
-    /// That keeps ``FileSystemCache/init(_:subfolder:)`` non-failing, which is right for two
+    /// That keeps ``FileSystemCache``'s initialisers non-failing, which is right for two
     /// reasons: the cache touches no disk until it is used, and a directory that is writable when
     /// a cache is constructed can stop being writable afterwards, so a check at construction
     /// would be a guarantee this package cannot keep.

@@ -7,18 +7,20 @@
 
 import Testing
 import Foundation
+import Files
 
 import Cache
 
 /// Pins that code written against 6.0.0 still compiles and behaves as it did.
 ///
-/// 6.0.0 made `Resource` and `CodableResource` public, and its `Cache` protocol had no
-/// `removeExpired()` requirement. Each test below is written the way a 6.0.0 consumer wrote it,
-/// so much of the suite's value is that it compiles. Were a shim removed, or its shape changed,
-/// this file would stop building.
+/// 6.0.0 made `Resource` and `CodableResource` public, its `Cache` protocol had no
+/// `removeExpired()` requirement, and `FileSystemCache`'s initialiser took a `FileSystemDirectory`.
+/// Each test below is written the way a 6.0.0 consumer wrote it, so much of the suite's value is
+/// that it compiles. Were a shim removed, or its shape changed, this file would stop building.
 ///
 /// The import is deliberately not `@testable`: a consumer sees only the public surface, and the
-/// package's own internal types must not stand in for the shims here.
+/// package's own internal types must not stand in for the shims here. `Files` is imported because
+/// a 6.0.0 consumer that held a `FileSystemDirectory` value had to import it to name the type.
 ///
 /// The build reports a deprecation warning for each use of a shim below. Those are the warnings a
 /// 6.0.0 consumer sees, and they are expected. They cannot be silenced by marking this suite
@@ -120,6 +122,22 @@ struct DeprecatedAPITests {
         try await cache.stash(TestValue(count: "expired"), duration: .custom(.distantPast))
 
         #expect(try await sweep(cache) == 1)
+    }
+
+    /// Only a call that passes a `FileSystemDirectory` value reaches the deprecated initialiser; a
+    /// leading-dot call resolves to the `CacheDirectory` one. So the value is held in a variable
+    /// here, as 6.0.0 code that chose its directory at run time held it. Where a cache built this
+    /// way writes is pinned by `CacheDirectoryTests`.
+    @Test("A FileSystemCache is built from a FileSystemDirectory value the way 6.0.0 code did")
+    func fileSystemCacheIsBuiltFromAFileSystemDirectory() async throws {
+
+        let directory: FileSystemDirectory = .caches
+
+        let unscoped = FileSystemCache<TestDocument>(directory)
+        let scoped = FileSystemCache<TestDocument>(directory, subfolder: "Cheeses")
+
+        try await unscoped.stash(TestDocument(id: "1", body: "body"), duration: .long)
+        try await scoped.stash(TestDocument(id: "1", body: "body"), duration: .long)
     }
 }
 
