@@ -44,13 +44,14 @@ tooling, decode dates accordingly.
 
 ## Where a subfolder may lead
 
-Everything the cache creates, writes and deletes is inside `<base>`. A subfolder is joined to
-`<base>` as written, so without a check `"../Documents"` would put the cache in the directory
-beside it. Every operation therefore checks the folder it is about to use, before creating
-anything, and refuses one that resolves outside `<base>` by throwing
-`CocoaError.fileWriteInvalidFileName`. The error's `url` is the folder's location, as joined
-before anything is resolved. Nothing is created or written when that happens, and the cache
-itself is unaffected: the initialiser still cannot fail, and the next operation checks again.
+Apart from `<base>` itself, which every operation creates if it is missing, everything the cache
+creates, writes and deletes is inside `<base>`. A subfolder is joined to `<base>` as written, so
+without a check `"../Documents"` would put the cache in the directory beside it. Every operation
+therefore checks the folder it is about to use, before creating anything below `<base>`, and
+refuses one that resolves outside `<base>` by throwing `CocoaError.fileWriteInvalidFileName`. The
+error's `url` is the folder's location, as joined before anything is resolved. Nothing is created
+or written below `<base>` when that happens, and the cache itself is unaffected: the initialiser
+still cannot fail, and the next operation checks again.
 
 The folder is refused when:
 

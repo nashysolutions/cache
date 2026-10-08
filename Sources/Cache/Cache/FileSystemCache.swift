@@ -31,9 +31,9 @@ import Files
 /// not keep.
 ///
 /// The same holds for a subfolder that leads outside the directory you nominate. Every operation
-/// checks the folder it is about to use before creating anything, and refuses one that resolves
-/// outside that directory by throwing `CocoaError.fileWriteInvalidFileName`, so the cache never
-/// writes outside it. See ``init(_:subfolder:)`` for what a subfolder may contain.
+/// checks the folder it is about to use before creating anything below that directory, and
+/// refuses one that resolves outside it by throwing `CocoaError.fileWriteInvalidFileName`, so the
+/// cache never writes outside it. See ``init(_:subfolder:)`` for what a subfolder may contain.
 ///
 /// - Important: On a non-sandboxed macOS process, `.documents` is the user's real `~/Documents`.
 ///   A cache nominating it will create a folder there on first use. Before this package shipped a
@@ -59,8 +59,9 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
     /// A subfolder is a path below `fileSystemDirectory`, and may be nested, such as
     /// `"Cheeses/Soft"`. It must stay inside that directory, and every operation refuses one that
     /// does not by throwing `CocoaError.fileWriteInvalidFileName`, carrying the folder's location
-    /// in the error's `url`. Nothing is created or written when that happens. A subfolder is
-    /// refused when:
+    /// in the error's `url`. Nothing is created or written below `fileSystemDirectory` when that
+    /// happens. The directory itself is still created if it is missing, because every operation
+    /// resolves it first in order to check the subfolder against it. A subfolder is refused when:
     ///
     /// - it has a `..` component, such as `"../Documents"` or `"a/../b"`, wherever it would lead;
     /// - it passes through a symbolic link that leads outside the directory, or one that cannot be

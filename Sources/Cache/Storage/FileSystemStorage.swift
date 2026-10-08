@@ -71,9 +71,13 @@ final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableS
     ///
     /// Before anything is created below the base directory, the folder is checked against it by
     /// ``FileSystemContainment``, so a subfolder that resolves outside the base directory is
-    /// refused by every operation and creates nothing. The check is made here rather than in the
-    /// initialiser for two reasons: the initialiser touches no disk and cannot fail, and a link
-    /// that is not there when a cache is built can be there by the time it is used.
+    /// refused by every operation and creates nothing below it. The base directory itself is
+    /// created first if it is missing: the check needs its location, and the client's only way to
+    /// report a location is `makeStore`, which creates the folder it reports.
+    ///
+    /// The check is made here rather than in the initialiser for two reasons: the initialiser
+    /// touches no disk and cannot fail, and a link that is not there when a cache is built can be
+    /// there by the time it is used.
     ///
     /// - Throws: `CocoaError.fileWriteInvalidFileName` if the folder resolves outside the base
     ///   directory, or another error if the store could not be created.
