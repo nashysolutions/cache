@@ -190,7 +190,7 @@ struct SubfolderContainmentTests {
 /// Each test plants the link where the cache's entry for `"1"` goes, pointing at a file in
 /// `<sandbox>/outside`, and asserts on that file's bytes afterwards. A cache that followed the
 /// link would change them, or would serve them.
-@Suite("FileSystemCache entry filename links")
+@Suite("FileSystemCache entry filename links", .dependency(\.date.now, pinnedNow))
 struct EntryFilenameLinkTests {
 
     @Test("A stash over a link at the entry's filename leaves the link's target unchanged, and writes the entry inside the base directory")
