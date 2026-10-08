@@ -13,7 +13,7 @@ import Files
 /// A resource storage backend that persists data to the local file system.
 ///
 /// `FileSystemStorage` provides a `CodableStorage`-conforming implementation that saves
-/// and retrieves `CodableResource` instances using a structured file system directory and
+/// and retrieves `CodableEntry` instances using a structured file system directory and
 /// optional subfolder path.
 ///
 /// Entries are written into a folder scoped to both the layout version and the item type, and
@@ -29,7 +29,7 @@ import Files
 final class FileSystemStorage<Item: Identifiable & Codable & Sendable>: CodableStorage where Item.ID: CustomStringConvertible {
 
     /// The stored resource type used by this storage.
-    typealias StoredResource = CodableResource<Item>
+    typealias StoredResource = CodableEntry<Item>
 
     /// The resource type exposed through the `Storage` protocol.
     typealias Resource = StoredResource

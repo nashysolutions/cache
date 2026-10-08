@@ -9,7 +9,7 @@ import Foundation
 
 /// A cache-like database abstraction that provides access to a storage backend and resource lifecycle management.
 ///
-/// `Database` defines a higher-level interface for managing `Resource`-wrapped items,
+/// `Database` defines a higher-level interface for managing entry-wrapped items,
 /// backed by a concrete implementation of ``Storage``. It provides lifecycle behaviours
 /// such as stashing, fetching, and automatic expiration handling.
 ///

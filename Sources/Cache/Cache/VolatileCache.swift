@@ -41,7 +41,7 @@ public struct VolatileCache<Item: Identifiable & Sendable>: DatabaseBackedCache 
     ///   - duration: The expiry policy to use.
     /// - Throws: An error if the item could not be inserted.
     public func stash(_ item: Item, duration: Expiry) async throws {
-        let resource = Resource<Item>(item: item, expiry: duration.date())
+        let resource = Entry<Item>(item: item, expiry: duration.date())
         try await database.stash(resource)
     }
 
