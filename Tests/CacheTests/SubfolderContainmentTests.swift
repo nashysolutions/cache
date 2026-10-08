@@ -184,6 +184,110 @@ struct SubfolderContainmentTests {
     }
 }
 
+/// Exercises a symbolic link at an entry's own filename, which the folder check above does not
+/// reach: the folder is inside the base directory, and only the entry's last component leads out.
+///
+/// Each test plants the link where the cache's entry for `"1"` goes, pointing at a file in
+/// `<sandbox>/outside`, and asserts on that file's bytes afterwards. A cache that followed the
+/// link would change them, or would serve them.
+@Suite("FileSystemCache entry filename links", .dependency(\.date.now, pinnedNow))
+struct EntryFilenameLinkTests {
+
+    @Test("A stash over a link at the entry's filename leaves the link's target unchanged, and writes the entry inside the base directory")
+    func stashOverOutwardLinkLeavesTheTargetUnchanged() async throws {
+
+        let sandbox = try Sandbox()
+        defer { sandbox.remove() }
+
+        let target = sandbox.outside.appending(component: "target")
+        let original = Data("not the cache's to change".utf8)
+        try original.write(to: target)
+
+        let entry = try sandbox.linkEntry(for: "1", to: target)
+        let cache = sandbox.makeCache(subfolder: nil)
+        let before = sandbox.itemsOutsideBase()
+
+        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+
+        #expect(try Data(contentsOf: target) == original)
+        #expect(sandbox.itemsOutsideBase() == before)
+        #expect(isSymbolicLink(entry) == false)
+        #expect(regularFiles(under: sandbox.base) == [entryPath(for: "1")])
+        #expect(try await cache.resource(for: "1")?.count == "1")
+    }
+
+    /// A write that follows a link creates the target when it is missing, so a link to a path
+    /// that does not exist yet is the way to plant a new file outside, rather than change one.
+    @Test("A stash over a link to a missing file creates nothing outside the base directory")
+    func stashOverDanglingLinkCreatesNothingOutside() async throws {
+
+        let sandbox = try Sandbox()
+        defer { sandbox.remove() }
+
+        let target = sandbox.outside.appending(component: "planted")
+        let entry = try sandbox.linkEntry(for: "1", to: target)
+        let cache = sandbox.makeCache(subfolder: nil)
+
+        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+
+        // Listed directly rather than through `itemsOutsideBase()`, whose enumeration reports a
+        // link that cannot be followed under a different spelling of the sandbox's path.
+        #expect(try FileManager.default.contentsOfDirectory(atPath: sandbox.outside.path).isEmpty)
+        #expect(isSymbolicLink(entry) == false)
+        #expect(regularFiles(under: sandbox.base) == [entryPath(for: "1")])
+    }
+
+    /// The target is a real entry for `"1"`, moved outside, so a read that followed the link would
+    /// have something to serve. Reporting `nil` therefore shows the link was not followed, rather
+    /// than that what it led to did not decode.
+    @Test("A read through a link at the entry's filename reports nil, deletes the link, and leaves its target unchanged")
+    func readThroughOutwardLinkServesNothing() async throws {
+
+        let sandbox = try Sandbox()
+        defer { sandbox.remove() }
+
+        let cache = sandbox.makeCache(subfolder: nil)
+        try await cache.stash(CodableTestValue(count: "1"), duration: .long)
+
+        let entry = sandbox.base.appending(path: entryPath(for: "1"))
+        let target = sandbox.outside.appending(component: "target")
+        try FileManager.default.moveItem(at: entry, to: target)
+        let original = try Data(contentsOf: target)
+        try FileManager.default.createSymbolicLink(at: entry, withDestinationURL: target)
+
+        #expect(try await cache.resource(for: "1") == nil)
+        #expect(isSymbolicLink(entry) == false)
+        #expect(try Data(contentsOf: target) == original)
+        #expect(regularFiles(under: sandbox.outside) == ["target"])
+    }
+
+    @Test("A remove with a link at the entry's filename deletes the link, not its target")
+    func removeDeletesTheLinkNotItsTarget() async throws {
+
+        let sandbox = try Sandbox()
+        defer { sandbox.remove() }
+
+        let target = sandbox.outside.appending(component: "target")
+        let original = Data("not the cache's to delete".utf8)
+        try original.write(to: target)
+
+        let entry = try sandbox.linkEntry(for: "1", to: target)
+        let cache = sandbox.makeCache(subfolder: nil)
+        let before = sandbox.itemsOutsideBase()
+
+        try await cache.removeResource(for: "1")
+
+        #expect(isSymbolicLink(entry) == false)
+        #expect(try Data(contentsOf: target) == original)
+        #expect(sandbox.itemsOutsideBase() == before)
+    }
+}
+
+/// Whether there is a symbolic link at a location, without following it.
+private func isSymbolicLink(_ location: URL) -> Bool {
+    (try? FileManager.default.destinationOfSymbolicLink(atPath: location.path)) != nil
+}
+
 /// Expects every operation on a cache to be refused with the containment error, and nothing to be
 /// created anywhere in the sandbox: not outside the base directory, and not below it either, folders
 /// included. The base directory already exists, so the one thing an operation may create before
@@ -254,6 +358,20 @@ private struct Sandbox {
             at: base.appending(component: name),
             withDestinationURL: destination
         )
+    }
+
+    /// Places a symbolic link at the filename a cache with no subfolder uses for an identifier's
+    /// entry, creating the folders above it.
+    ///
+    /// - Returns: The location of the link.
+    func linkEntry(for identifier: String, to destination: URL) throws -> URL {
+        let entry = base.appending(path: entryPath(for: identifier))
+        try FileManager.default.createDirectory(
+            at: entry.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createSymbolicLink(at: entry, withDestinationURL: destination)
+        return entry
     }
 
     /// A cache whose base directory is `base`, whichever directory it nominates.
