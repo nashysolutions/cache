@@ -32,11 +32,16 @@ struct Cheese: Identifiable, Codable, Sendable {
 ///
 /// These tests deliberately use a plain `import Cache` rather than `@testable`, because the article
 /// promises a consumer something about the public surface and nothing about the internals.
+///
+/// The clock is pinned test by test rather than for the whole suite. Inside a test run, a cache
+/// that is not given a time records an issue, as the article warns, and one test below exists to
+/// show that. The tests in the live and preview contexts leave the clock alone, because there the
+/// default is the real clock, as it is in a shipping app.
 @Suite("QuickStart article")
 struct QuickStartTests {
 
     /// The `VolatileCache` snippet, run.
-    @Test("The VolatileCache snippet stashes and retrieves")
+    @Test("The VolatileCache snippet stashes and retrieves", .dependency(\.date.now, pinnedNow))
     func volatileCacheSnippetRoundTrips() async throws {
 
         let cache = VolatileCache<Cheese>()
@@ -131,7 +136,13 @@ struct QuickStartTests {
     /// A failure here is good news rather than a regression. It means the mock has been replaced
     /// with something that either keeps what it is given or fails loudly, and the article's
     /// warning has become false and needs deleting.
-    @Test("In a test context with nothing registered, the cache keeps nothing and says so nowhere")
+    ///
+    /// The clock is pinned so that the only thing left unregistered is the file system client,
+    /// which is what this test is about.
+    @Test(
+        "In a test context with nothing registered, the cache keeps nothing and says so nowhere",
+        .dependency(\.date.now, pinnedNow)
+    )
     func fileSystemCacheKeepsNothingInATestContext() async throws {
 
         let subfolder = "cache-quickstart-tests-\(UUID().uuidString)"
@@ -186,12 +197,15 @@ struct QuickStartTests {
     ///
     /// A write and a read of another identifier happen between stashing an expired item and the
     /// sweep. If either had swept on the consumer's behalf, the count would be zero.
-    @Test("The removeExpired() snippet sweeps only when called: a write and a read before it remove nothing")
+    @Test(
+        "The removeExpired() snippet sweeps only when called: a write and a read before it remove nothing",
+        .dependency(\.date.now, pinnedNow)
+    )
     func removeExpiredSnippetSweepsOnlyWhenCalled() async throws {
 
         let cache = VolatileCache<Cheese>()
 
-        try await cache.stash(Cheese(id: 1, name: "Brie"), duration: .custom(Date().addingTimeInterval(-60)))
+        try await cache.stash(Cheese(id: 1, name: "Brie"), duration: .custom(pinnedNow.addingTimeInterval(-60)))
         try await cache.stash(Cheese(id: 2, name: "Cheddar"), duration: .long)
         _ = try await cache.resource(for: 2)
 
@@ -229,5 +243,61 @@ struct QuickStartTests {
         #expect(removed == 1)
         #expect(regularFiles(under: root).count == 1)
         #expect(try await cache.resource(for: 2)?.name == "Cheddar")
+    }
+
+    /// The "Controlling time" snippet, run as written.
+    ///
+    /// The article states two rules, and the second lookup depends on both. The stash runs outside
+    /// any scope, so it counts the hour from `stashedAt` only if the cache kept the time it was
+    /// constructed with. Each lookup runs in a scope of its own, so it sees the entry as 59 or 61
+    /// minutes old only if the scope around a call takes precedence over the construction scope.
+    /// Were either rule false, `gone` would be the cheese.
+    @Test("The time snippet serves an hour's entry at 59 minutes and not at 61, without waiting")
+    func timeSnippetServesAtFiftyNineMinutesAndNotAtSixtyOne() async throws {
+
+        let stashedAt = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let cache = withDependencies {
+            $0.date.now = stashedAt
+        } operation: {
+            VolatileCache<Cheese>()
+        }
+
+        try await cache.stash(Cheese(id: 1, name: "Brie"), duration: .long)
+
+        let brie = try await withDependencies {
+            $0.date.now = stashedAt.addingTimeInterval(59 * 60)
+        } operation: {
+            try await cache.resource(for: 1)
+        }
+
+        let gone = try await withDependencies {
+            $0.date.now = stashedAt.addingTimeInterval(61 * 60)
+        } operation: {
+            try await cache.resource(for: 1)
+        }
+
+        #expect(brie?.name == "Brie")
+        #expect(gone == nil)
+    }
+
+    /// Pins the article's warning that a test must supply the time.
+    ///
+    /// `swift-dependencies` declares no test value for `\.date`, so a cache that is not given a
+    /// time reads the real clock and records an issue. This package cannot declare one either,
+    /// because the key is private to `swift-dependencies`.
+    ///
+    /// A failure here means the issue is no longer recorded. The article's warning is then false,
+    /// and the pinning in every other suite is no longer what keeps them passing.
+    @Test("In a test context, a cache that is not given a time records an issue")
+    func cacheWithoutATimeRecordsAnIssueInATestContext() async throws {
+
+        let cache = VolatileCache<Cheese>()
+
+        try await withKnownIssue {
+            try await cache.stash(Cheese(id: 1, name: "Brie"), duration: .long)
+        } matching: { issue in
+            issue.comments.contains { $0.rawValue.contains(#"@Dependency(\.date) has no test implementation"#) }
+        }
     }
 }

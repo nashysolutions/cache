@@ -46,9 +46,10 @@ try await cache.stash(Cheese(id: 1, name: "Brie"), duration: .long)
 let brie = try await cache.resource(for: 1)
 ```
 
-There is no step 2 here either. Entries are written to the real file system with no further
-setup, into a versioned folder below the directory you nominate. See <doc:OnDiskFormat> for the
-layout, and for what this package will and will not delete.
+There is no step 2 here either. `.caches` is a ``CacheDirectory``, which this package declares,
+so `import Cache` is the only import this needs. Entries are written to the real file system with
+no further setup, into a versioned folder below the directory you nominate. See
+<doc:OnDiskFormat> for the layout, and for what this package will and will not delete.
 
 A lookup for an identifier you have not stashed reports `nil` rather than throwing, and so does an
 entry whose stored payload no longer decodes. An error means the operation could not be completed:
@@ -80,6 +81,53 @@ let removed = try await cache.removeExpired()
 Every expired entry is removed and the count comes back. Nothing calls this for you: not a timer,
 not a read, not a write. Launch, sign-out and a low-storage warning are the usual moments. Both
 caches support it, and the result can be ignored.
+
+## Controlling time
+
+Both caches read the current time from `@Dependency(\.date)`, which comes from
+[swift-dependencies](https://github.com/pointfreeco/swift-dependencies). A stash counts its
+``Expiry`` from that reading, and a lookup or a sweep judges the expiry against a fresh one. An
+entry is served up to and including the instant it expires, and not after it.
+
+To set the time, override `\.date` with `withDependencies`. A cache constructed inside such a scope
+keeps that time for every later call made outside one, and a scope around a single call takes
+precedence for that call.
+
+```swift
+import Cache
+import Dependencies
+import Foundation
+
+let stashedAt = Date(timeIntervalSince1970: 1_700_000_000)
+
+let cache = withDependencies {
+    $0.date.now = stashedAt
+} operation: {
+    VolatileCache<Cheese>()
+}
+
+try await cache.stash(Cheese(id: 1, name: "Brie"), duration: .long)
+
+let brie = try await withDependencies {
+    $0.date.now = stashedAt.addingTimeInterval(59 * 60)
+} operation: {
+    try await cache.resource(for: 1)
+}
+
+let gone = try await withDependencies {
+    $0.date.now = stashedAt.addingTimeInterval(61 * 60)
+} operation: {
+    try await cache.resource(for: 1)
+}
+```
+
+`brie` is the cheese, 59 minutes into its hour, and `gone` is `nil`, a minute after the hour ran
+out. Nothing waits in between.
+
+In a test, override `\.date` for every cache that stashes, looks up or sweeps. `swift-dependencies`
+declares no test value for it, so a cache left on the default reads the real clock, and the read is
+recorded as a test failure saying that `@Dependency(\.date)` has no test implementation. A preview
+and a shipping app read the real clock, and record nothing.
 
 ## Supplying your own file system
 
@@ -143,6 +191,13 @@ a duplicate and will not compile. Delete yours.
 
 If you also wrote the `FileSystemClientKey` conformance, this package never read it. Keep it only
 if something else in your app does.
+
+``FileSystemCache`` used to take a `FileSystemDirectory` from the `Files` package, and now takes a
+``CacheDirectory``. A call written with a leading dot, such as `FileSystemCache<Cheese>(.caches)`,
+needs no change. Code that passes a `FileSystemDirectory` value still compiles, with a deprecation
+warning, until 8.0.0; pass the ``CacheDirectory`` case of the same name instead, which names the
+same directory, so entries already on disk are still found. If `Files` was imported only to name
+the directory, that import can go.
 
 To learn more about `liveValue` see the readme for [Pointfree's](https://www.pointfree.co) library
 named [Dependencies](https://github.com/pointfreeco/swift-dependencies).

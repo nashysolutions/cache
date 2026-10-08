@@ -9,6 +9,7 @@ import Testing
 import Foundation
 import CryptoKit
 import Dependencies
+import DependenciesTestSupport
 import FoundationDependencies
 import Files
 
@@ -23,7 +24,7 @@ import Cache
 /// either constraint tightened again, this file would stop compiling.
 ///
 /// The import is deliberately not `@testable`: the point is what a consumer can write.
-@Suite("Identifier types")
+@Suite("Identifier types", .dependency(\.date.now, pinnedNow))
 struct IdentifierTypeTests {
 
     /// The shape most SwiftUI apps give a model, and the one 6.0.0 could not cache.

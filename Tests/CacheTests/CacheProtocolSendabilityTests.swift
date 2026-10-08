@@ -7,6 +7,8 @@
 
 import Testing
 import Foundation
+import Dependencies
+import DependenciesTestSupport
 
 import Cache
 
@@ -21,7 +23,7 @@ import Cache
 ///
 /// These tests deliberately use a plain `import Cache` rather than `@testable`, because the bounds
 /// are a promise to a consumer, who sees only the public surface.
-@Suite("Cache protocol sendability")
+@Suite("Cache protocol sendability", .dependency(\.date.now, pinnedNow))
 struct CacheProtocolSendabilityTests {
 
     @Test("Generic code on the main actor can stash an item and read it back by identifier")

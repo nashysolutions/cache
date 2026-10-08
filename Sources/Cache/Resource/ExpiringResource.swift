@@ -30,28 +30,25 @@ extension IdentifiableResource {
 protocol ExpiringResource: IdentifiableResource {
     /// The expiry date for this resource.
     var expiry: Date { get }
-    /// Indicates whether the resource has expired.
-    var isExpired: Bool { get }
     /// Whether the resource had expired at a given instant.
     ///
-    /// Declared here as well as defaulted below, because the default `isExpired` calls it: a
-    /// conformer that customised only the extension method would not be reached through the
-    /// protocol.
+    /// Declared here as well as defaulted below, because the callers are generic over
+    /// `ExpiringResource`: a conformer that customised only the extension method would not be
+    /// reached through the protocol.
     func isExpired(asOf now: Date) -> Bool
 }
 
 extension ExpiringResource {
     
-    /// Whether the resource has expired.
-    var isExpired: Bool {
-        isExpired(asOf: Date())
-    }
-
     /// Whether the resource had expired at a given instant.
     ///
     /// The instant is a parameter so that a sweep over many resources can judge every one against
     /// the same moment. Reading the clock per resource would let two resources with the same
     /// expiry fall on opposite sides of it.
+    ///
+    /// There is deliberately no form that reads the time itself. The time comes from the cache,
+    /// which reads it from `@Dependency(\.date)`, so a test that pins that dependency governs
+    /// every expiry decision.
     ///
     /// - Parameter now: The instant to judge against.
     /// - Returns: `true` if the resource's expiry precedes `now`.

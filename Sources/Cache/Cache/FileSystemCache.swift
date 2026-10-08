@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Dependencies
 import Files
 
 /// A persistent, file system–backed cache for identifiable and codable items.
@@ -14,6 +15,9 @@ import Files
 /// disk. It is suitable for use cases where data must be retained across app launches.
 ///
 /// Each item is written with its expiry as one JSON file, which is why `Item` must be `Codable`.
+///
+/// The current time comes from `@Dependency(\.date)`, read when an item is stashed, looked up or
+/// swept, so a test sets it with `withDependencies` rather than waiting. See <doc:QuickStart>.
 ///
 /// Entries are written into a folder below the directory you nominate, scoped to both the layout
 /// version and `Item`, and never directly into the directory itself. The cache therefore only
@@ -33,7 +37,8 @@ import Files
 /// The same holds for a subfolder that leads outside the directory you nominate. Every operation
 /// checks the folder it is about to use before creating anything below that directory, and
 /// refuses one that resolves outside it by throwing `CocoaError.fileWriteInvalidFileName`, so the
-/// cache never writes outside it. See ``init(_:subfolder:)`` for what a subfolder may contain.
+/// cache never writes outside it. See ``init(_:subfolder:)-(CacheDirectory,_)`` for what a
+/// subfolder may contain.
 ///
 /// - Important: On a non-sandboxed macOS process, `.documents` is the user's real `~/Documents`.
 ///   A cache nominating it will create a folder there on first use. Before this package shipped a
@@ -43,6 +48,9 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
 
     /// The backing file system–based database.
     let database: FileSystemDatabase<Item>
+
+    /// The only source of the current time, for setting an expiry and for judging one.
+    @Dependency(\.date) var date
 
     /// Creates a new file system–backed cache.
     ///
@@ -56,12 +64,12 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
     ///
     /// ## Subfolder
     ///
-    /// A subfolder is a path below `fileSystemDirectory`, and may be nested, such as
-    /// `"Cheeses/Soft"`. It must stay inside that directory, and every operation refuses one that
-    /// does not by throwing `CocoaError.fileWriteInvalidFileName`, carrying the folder's location
-    /// in the error's `url`. Nothing is created or written below `fileSystemDirectory` when that
-    /// happens. The directory itself is still created if it is missing, because every operation
-    /// resolves it first in order to check the subfolder against it. A subfolder is refused when:
+    /// A subfolder is a path below `directory`, and may be nested, such as `"Cheeses/Soft"`. It
+    /// must stay inside that directory, and every operation refuses one that does not by throwing
+    /// `CocoaError.fileWriteInvalidFileName`, carrying the folder's location in the error's `url`.
+    /// Nothing is created or written below `directory` when that happens. The directory itself is
+    /// still created if it is missing, because every operation resolves it first in order to check
+    /// the subfolder against it. A subfolder is refused when:
     ///
     /// - it has a `..` component, such as `"../Documents"` or `"a/../b"`, wherever it would lead;
     /// - it passes through a symbolic link that leads outside the directory, or one that cannot be
@@ -76,12 +84,27 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
     /// directory; it does not stop it naming a different folder inside it.
     ///
     /// - Parameters:
-    ///   - fileSystemDirectory: The root directory in which resources will be stored.
-    ///   - subfolder: An optional path below `fileSystemDirectory` used to scope the cache
-    ///     contents. Defaults to `nil`.
+    ///   - directory: The root directory in which resources will be stored.
+    ///   - subfolder: An optional path below `directory` used to scope the cache contents.
+    ///     Defaults to `nil`.
     public init(
-        _ fileSystemDirectory: FileSystemDirectory,
+        _ directory: CacheDirectory,
         subfolder: String? = nil
+    ) {
+        self.init(fileSystemDirectory: directory.fileSystemDirectory, subfolder: subfolder)
+    }
+
+    /// Creates a cache below a directory named the way the `Files` package names it.
+    ///
+    /// Both public initialisers come through here, so a cache built either way is configured the
+    /// same way.
+    ///
+    /// - Parameters:
+    ///   - fileSystemDirectory: The root directory in which resources will be stored.
+    ///   - subfolder: An optional path below `fileSystemDirectory`.
+    init(
+        fileSystemDirectory: FileSystemDirectory,
+        subfolder: String?
     ) {
         database = FileSystemDatabase<Item>(
             fileSystemDirectory: fileSystemDirectory,
@@ -98,7 +121,7 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
     ///   - duration: The expiry policy to apply.
     /// - Throws: An error if the item could not be saved to disk.
     public func stash(_ item: Item, duration: Expiry) async throws {
-        let resource = CodableEntry(item: item, expiry: duration.date())
+        let resource = CodableEntry(item: item, expiry: duration.date(using: date.now))
         try await database.stash(resource)
     }
 
@@ -131,7 +154,7 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
     ///   be decoded.
     /// - Throws: An error if the lookup could not be completed.
     public func resource(for identifier: Item.ID) async throws -> Item? {
-        try await database.resource(for: identifier)?.item
+        try await database.resource(for: identifier, asOf: date.now)?.item
     }
 
     /// Clears all cached items from the underlying storage.
@@ -160,6 +183,6 @@ public struct FileSystemCache<Item: Identifiable & Codable & Sendable>: Database
     ///   removed; the sweep is not transactional.
     @discardableResult
     public func removeExpired() async throws -> Int {
-        try await database.removeExpired()
+        try await database.removeExpired(asOf: date.now)
     }
 }

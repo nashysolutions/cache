@@ -12,7 +12,7 @@ import DependenciesTestSupport
 
 @testable import Cache
 
-@Suite("Volatile Cache Tests")
+@Suite("Volatile Cache Tests", .dependency(\.date.now, pinnedNow))
 struct VolatileCacheTests {
 
     @Test("Remove a stashed item")
@@ -76,7 +76,7 @@ struct VolatileCacheTests {
         let cache = VolatileCache<TestValue>()
         let item = TestValue(count: "123")
         let identifier = item.id
-        let expiry = Expiry.custom(Date().addingTimeInterval(2))
+        let expiry = Expiry.custom(pinnedNow.addingTimeInterval(2))
 
         try await cache.stash(item, duration: expiry)
 
@@ -91,7 +91,7 @@ struct VolatileCacheTests {
         let cache = VolatileCache<TestValue>()
         let item = TestValue(count: "123")
         let identifier = item.id
-        let expiry = Expiry.custom(Date().addingTimeInterval(-1))
+        let expiry = Expiry.custom(pinnedNow.addingTimeInterval(-1))
 
         try await cache.stash(item, duration: expiry)
 
@@ -103,9 +103,9 @@ struct VolatileCacheTests {
     @Test("removeExpired() removes the expired entries, keeps the rest, and reports how many went")
     func removeExpiredRemovesOnlyExpiredEntries() async throws {
         let cache = VolatileCache<TestValue>()
-        try await cache.stash(TestValue(count: "expired-a"), duration: .custom(Date().addingTimeInterval(-1)))
-        try await cache.stash(TestValue(count: "expired-b"), duration: .custom(Date().addingTimeInterval(-3600)))
-        try await cache.stash(TestValue(count: "live"), duration: .custom(Date().addingTimeInterval(3600)))
+        try await cache.stash(TestValue(count: "expired-a"), duration: .custom(pinnedNow.addingTimeInterval(-1)))
+        try await cache.stash(TestValue(count: "expired-b"), duration: .custom(pinnedNow.addingTimeInterval(-3600)))
+        try await cache.stash(TestValue(count: "live"), duration: .custom(pinnedNow.addingTimeInterval(3600)))
 
         let removed = try await cache.removeExpired()
 
@@ -119,7 +119,7 @@ struct VolatileCacheTests {
     @Test("removeExpired() removes what it counts: a second sweep finds nothing")
     func secondSweepFindsNothing() async throws {
         let cache = VolatileCache<TestValue>()
-        try await cache.stash(TestValue(count: "expired"), duration: .custom(Date().addingTimeInterval(-1)))
+        try await cache.stash(TestValue(count: "expired"), duration: .custom(pinnedNow.addingTimeInterval(-1)))
 
         #expect(try await cache.removeExpired() == 1)
         #expect(try await cache.removeExpired() == 0)
