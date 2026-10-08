@@ -14,10 +14,14 @@ import Foundation
 ///
 /// This is typically used in cache management or offline resource fetching systems.
 public enum Expiry: Sendable {
-
+    
     /// Indicates a short-lived resource, valid for exactly **1 minute** (60 seconds) from the
     /// moment it is stashed.
     case short
+
+    /// Indicates a medium-lived resource, valid for exactly **3 minutes** (180 seconds) from the
+    /// moment it is stashed.
+    case medium
 
     /// Indicates a long-lived resource, valid for exactly **1 hour** (3600 seconds) from the
     /// moment it is stashed.
@@ -37,6 +41,7 @@ public enum Expiry: Sendable {
     func date(using now: Date = Date()) -> Date {
         switch self {
         case .short: return now.addingTimeInterval(60 * 1)
+        case .medium: return now.addingTimeInterval(60 * 3)
         case .long: return now.addingTimeInterval(60 * 60)
         case .custom(let date): return date
         }
